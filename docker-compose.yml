@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: store-manager-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: store
+      POSTGRES_PASSWORD: store
+      POSTGRES_DB: store_manager
+    ports:
+      - "5432:5432"
+    volumes:
+      - store_manager_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U store -d store_manager"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  store_manager_data:

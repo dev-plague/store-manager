@@ -1,0 +1,20 @@
+node_modules/
+
+# Lockfiles de otros gestores de paquetes (este proyecto usa Bun: bun.lock).
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+/.cache
+/build
+/.react-router
+.env
+.env.*
+!.env.example
+
+# Drizzle: se ignoran las migraciones generadas porque se regeneran con
+# `npm run db:generate` (descomenta si prefieres versionarlas).
+# /drizzle
+
+*.log
+.DS_Store
