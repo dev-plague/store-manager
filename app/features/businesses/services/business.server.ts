@@ -1,6 +1,21 @@
-import { asc, count, eq, ne, and, isNull, sql, type SQL } from "drizzle-orm";
+import {
+  asc,
+  count,
+  eq,
+  ne,
+  and,
+  inArray,
+  isNull,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { db } from "~/db/client.server";
-import { businesses, ledgerEntries, users } from "~/db/schema";
+import {
+  businesses,
+  customers,
+  ledgerEntries,
+  users,
+} from "~/db/schema";
 import type { Business } from "~/types";
 
 // Acceso a tiendas. Usado por las vistas globales del Administrador Global
@@ -136,17 +151,74 @@ export async function countBusinessUsers(businessId: string): Promise<number> {
   return row?.value ?? 0;
 }
 
-// Elimina una tienda. Se bloquea si tiene usuarios asignados para evitar
-// dejar cuentas huérfanas sin tienda.
-export async function deleteBusiness(id: string): Promise<void> {
-  const assignedUsers = await countBusinessUsers(id);
+// Resumen del impacto de eliminar una tienda (para la confirmación fuerte).
+export type BusinessDeletionImpact = {
+  customers: number;
+  entries: number;
+  users: number;
+};
 
-  if (assignedUsers > 0) {
-    throw new Response(
-      "No se puede eliminar: la tienda tiene usuarios asignados. Desactívala en su lugar.",
-      { status: 400 },
-    );
+export async function getBusinessDeletionImpact(
+  id: string,
+): Promise<BusinessDeletionImpact> {
+  const [customerRows, entryRows, userRows] = await Promise.all([
+    db
+      .select({ value: count() })
+      .from(customers)
+      .where(eq(customers.businessId, id)),
+    db
+      .select({ value: count() })
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.businessId, id)),
+    db.select({ value: count() }).from(users).where(eq(users.businessId, id)),
+  ]);
+
+  return {
+    customers: customerRows[0]?.value ?? 0,
+    entries: entryRows[0]?.value ?? 0,
+    users: userRows[0]?.value ?? 0,
+  };
+}
+
+// Elimina una tienda con TODO su contenido en cascada: clientes, movimientos,
+// permisos y los usuarios asignados (antes se bloqueaba si tenía usuarios).
+// Operación destructiva: solo la ejecuta el Administrador Global.
+export async function deleteBusiness(id: string): Promise<void> {
+  const members = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.businessId, id));
+  const memberIds = members.map((member) => member.id);
+
+  // Si algún usuario de la tienda registró movimientos en OTRA tienda, la FK
+  // RESTRICT de `ledger_entries.created_by` impediría borrarlo: se avisa.
+  if (memberIds.length > 0) {
+    const [foreignEntries] = await db
+      .select({ value: count() })
+      .from(ledgerEntries)
+      .where(
+        and(
+          inArray(ledgerEntries.createdBy, memberIds),
+          ne(ledgerEntries.businessId, id),
+        ),
+      );
+
+    if ((foreignEntries?.value ?? 0) > 0) {
+      throw new Response(
+        "No se puede eliminar: algún usuario de la tienda registró movimientos en otra tienda.",
+        { status: 400 },
+      );
+    }
   }
 
-  await db.delete(businesses).where(eq(businesses.id, id));
+  await db.transaction(async (tx) => {
+    // `customers`, `ledger_entries` y `user_permissions` caen por CASCADE.
+    await tx.delete(businesses).where(eq(businesses.id, id));
+
+    // Los usuarios quedan con `business_id = null` tras el CASCADE: se eliminan
+    // explícitamente (sus movimientos ya se borraron con la tienda).
+    if (memberIds.length > 0) {
+      await tx.delete(users).where(inArray(users.id, memberIds));
+    }
+  });
 }

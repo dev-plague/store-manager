@@ -1,6 +1,11 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 import { db } from "~/db/client.server";
-import { sessions, userPermissions, users } from "~/db/schema";
+import {
+  ledgerEntries,
+  sessions,
+  userPermissions,
+  users,
+} from "~/db/schema";
 import { auth } from "~/lib/auth.server";
 import { isPermission, type Permission } from "~/lib/permissions";
 import type { BusinessUser } from "~/types";
@@ -284,4 +289,81 @@ export async function setBusinessUserPassword(input: {
   if (input.revokeSessions ?? true) {
     await db.delete(sessions).where(eq(sessions.userId, input.userId));
   }
+}
+
+// Cuenta los movimientos registrados por un usuario en una tienda.
+export async function countUserLedgerEntries(
+  businessId: string,
+  userId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(ledgerEntries)
+    .where(
+      and(
+        eq(ledgerEntries.businessId, businessId),
+        eq(ledgerEntries.createdBy, userId),
+      ),
+    );
+
+  return row?.value ?? 0;
+}
+
+// Elimina definitivamente un usuario de la tienda. Como
+// `ledger_entries.created_by` es ON DELETE RESTRICT, en cascada se eliminan los
+// movimientos que registró en esa tienda. `user_permissions`, `sessions` y
+// `accounts` caen por CASCADE. Operación destructiva (solo Administrador Global).
+export async function deleteBusinessUser(input: {
+  businessId: string;
+  userId: string;
+  actingUserId: string;
+}): Promise<void> {
+  const { businessId, userId, actingUserId } = input;
+
+  if (userId === actingUserId) {
+    throw new Response("No puedes eliminar tu propio usuario.", { status: 400 });
+  }
+
+  const [member] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.id, userId), eq(users.businessId, businessId)))
+    .limit(1);
+
+  if (!member) {
+    throw new Response("Usuario no encontrado.", { status: 404 });
+  }
+
+  // Si el usuario registró movimientos en OTRA tienda, la FK RESTRICT seguiría
+  // bloqueando el borrado: se avisa en lugar de fallar con un error de BD.
+  const [foreignEntries] = await db
+    .select({ value: count() })
+    .from(ledgerEntries)
+    .where(
+      and(
+        eq(ledgerEntries.createdBy, userId),
+        ne(ledgerEntries.businessId, businessId),
+      ),
+    );
+
+  if ((foreignEntries?.value ?? 0) > 0) {
+    throw new Response(
+      "No se puede eliminar: el usuario registró movimientos en otra tienda.",
+      { status: 400 },
+    );
+  }
+
+  await db.transaction(async (tx) => {
+    // Se eliminan primero sus movimientos para poder borrar el usuario.
+    await tx
+      .delete(ledgerEntries)
+      .where(
+        and(
+          eq(ledgerEntries.businessId, businessId),
+          eq(ledgerEntries.createdBy, userId),
+        ),
+      );
+
+    await tx.delete(users).where(eq(users.id, userId));
+  });
 }

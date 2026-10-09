@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { useEffect } from "react";
 import { Form, Link, redirect } from "react-router";
 import { sileo } from "sileo";
+import { DeleteConfirm } from "~/components/delete-confirm";
 import { SubmitButton } from "~/components/submit-button";
 import { Card } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -12,6 +13,7 @@ import { authContext } from "~/context";
 import {
   deleteBusiness,
   getBusinessById,
+  getBusinessDeletionImpact,
   updateBusiness,
   type UpdateBusinessInput,
 } from "~/features/businesses/services/business.server";
@@ -55,7 +57,11 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     throw new Response("Tienda no encontrada.", { status: 404 });
   }
 
-  return { business, canEditGlobalFields: auth.isSuperadmin };
+  const impact = auth.isSuperadmin
+    ? await getBusinessDeletionImpact(params.businessId)
+    : null;
+
+  return { business, canEditGlobalFields: auth.isSuperadmin, impact };
 }
 
 export async function action({
@@ -128,7 +134,7 @@ export default function BusinessDetail({
   loaderData,
   actionData,
 }: Route.ComponentProps) {
-  const { business, canEditGlobalFields } = loaderData;
+  const { business, canEditGlobalFields, impact } = loaderData;
 
   useEffect(() => {
     if (!actionData) return;
@@ -230,27 +236,21 @@ export default function BusinessDetail({
         {canEditGlobalFields ? (
           <>
             <Separator />
-            <Form
-              method="post"
-              onSubmit={(event) => {
-                if (
-                  !window.confirm(
-                    `¿Eliminar la tienda "${business.name}"? Esta acción no se puede deshacer.`,
-                  )
-                ) {
-                  event.preventDefault();
-                }
-              }}
-            >
-              <input type="hidden" name="intent" value="delete" />
-              <SubmitButton
-                variant="destructive"
-                pendingText="Eliminando…"
-                className="h-12 w-full rounded-xl text-base"
-              >
-                Eliminar tienda
-              </SubmitButton>
-            </Form>
+            <DeleteConfirm
+              triggerLabel="Eliminar tienda"
+              title={`Eliminar «${business.name}»`}
+              confirmText={business.name}
+              fields={{ intent: "delete" }}
+              description={
+                <>
+                  Se eliminarán en cascada{" "}
+                  <strong>{impact?.customers ?? 0} clientes</strong>,{" "}
+                  <strong>{impact?.entries ?? 0} movimientos</strong> y{" "}
+                  <strong>{impact?.users ?? 0} usuarios</strong>. Esta acción no
+                  se puede deshacer.
+                </>
+              }
+            />
           </>
         ) : null}
       </Card>

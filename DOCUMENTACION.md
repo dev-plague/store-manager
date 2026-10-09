@@ -388,6 +388,7 @@ store-manager/
 │   │   ├── money-input.tsx     # Entrada de dinero con separador de miles (visual)
 │   │   ├── mobile-nav.tsx      # Barra de navegación inferior (móvil)
 │   │   ├── customer-search.tsx # Búsqueda de clientes con autocompletado
+│   │   ├── delete-confirm.tsx  # Diálogo de confirmación fuerte (escribir nombre)
 │   │   ├── flash-toast.tsx     # Notificación de éxito tras un redirect (?flash=)
 │   │   ├── submit-button.tsx   # Botón con spinner + bloqueo anti doble-envío
 │   │   ├── theme-toggle.tsx    # Tema claro/oscuro/sistema (+ script anti-flash)
@@ -539,12 +540,14 @@ reciben `businessId` para el aislamiento.
 | `updateBusiness(id, changes)` | Actualiza (valida slug único) |
 | `setBusinessActive(id, bool)` | Activa/desactiva |
 | `countBusinessUsers(id)` | Cuenta usuarios asignados |
-| `deleteBusiness(id)` | Elimina; **bloquea si tiene usuarios** |
+| `getBusinessDeletionImpact(id)` | Cuenta clientes/movimientos/usuarios afectados al eliminar |
+| `deleteBusiness(id)` | Elimina la tienda con **todo en cascada** (clientes, movimientos, permisos y usuarios) |
 
 ### `customers` (`customer.server.ts`)
 
 `listCustomers(businessId, search?)`, `getCustomerById`, `createCustomer`,
-`updateCustomer`, `desactivateCustomer` (borrado lógico).
+`updateCustomer`, `desactivateCustomer` (borrado lógico) y
+`deleteCustomer` (borrado real; sus movimientos caen por CASCADE).
 
 ### `ledger` (`ledger.server.ts`)
 
@@ -568,6 +571,8 @@ reciben `businessId` para el aislamiento.
 | `updateBusinessUserName(...)` | Cambia el nombre |
 | `setUserPermissions({...})` | Reemplaza el conjunto de permisos (transacción) |
 | `setBusinessUserPassword({...})` | Restablece contraseña (hash interno de Better Auth) |
+| `countUserLedgerEntries(businessId, userId)` | Cuenta movimientos registrados por el usuario |
+| `deleteBusinessUser({...})` | Elimina el usuario y sus movimientos en la tienda (cascada) |
 
 ### `metrics` (`metrics.server.ts`)
 
@@ -587,9 +592,9 @@ reciben `businessId` para el aislamiento.
   `--background`, `--foreground`, `--primary`, `--chart-1..5`, modo oscuro, etc.).
 - **shadcn/ui** (estilo *new-york*, Tailwind v4): los componentes base viven en
   `components/ui/*` (`button`, `card`, `input`, `label`, `select`, `checkbox`,
-  `badge`, `tabs`, `alert`, `separator`) y se usan en toda la UI en lugar de
-  elementos nativos. Los primitivos accesibles vienen del paquete unificado
-  `radix-ui`. Para añadir más: `bun x shadcn@latest add dialog`.
+  `badge`, `tabs`, `alert`, `separator`, `dialog`) y se usan en toda la UI en
+  lugar de elementos nativos. Los primitivos accesibles vienen del paquete
+  unificado `radix-ui`. Para añadir más: `bun x shadcn@latest add dialog`.
 - **Mobile-First**: layouts de una columna que escalan con `sm:`/`lg:`; tablas con
   scroll horizontal cuando aplica.
 - **Notificaciones (sileo)**: el `<Toaster />` vive en `root.tsx`. Las rutas usan
@@ -614,6 +619,11 @@ reciben `businessId` para el aislamiento.
   deshabilitan y muestran un spinner mientras hay una acción en curso, y los
   formularios se limpian tras el éxito. Evita registros duplicados por doble
   pulsación (deudas, abonos, correcciones, altas, contraseñas).
+- **Borrado destructivo (`components/delete-confirm.tsx`)**: para eliminar
+  tiendas, clientes o usuarios se abre un `Dialog` que exige **escribir el
+  nombre exacto** antes de habilitar el botón. Muestra el impacto en cascada
+  (clientes, movimientos y usuarios afectados) y solo está disponible para el
+  Administrador Global.
 - **Progreso de navegación**: una barra fina superior indica que hay una
   navegación/carga en curso.
 - **Escritorio más amplio**: el panel usa `max-w-5xl`, navegación con icono +
@@ -803,8 +813,12 @@ bun x shadcn@latest add button card dialog
   `formatDate`.
 - **Totales globales asumen una sola moneda.** Si coexisten tiendas con monedas
   distintas, los agregados globales no convierten; hoy todo es COP.
-- **No hay borrado de usuarios.** Por la FK `created_by` con `RESTRICT`, un usuario
-  con movimientos no se puede eliminar. Tampoco hay campo `is_active` en `users`.
+- **Borrado destructivo en cascada (solo Administrador Global).** Tiendas,
+  clientes y usuarios se pueden eliminar desde la UI con confirmación fuerte
+  (escribir el nombre). El borrado es real y en cascada: eliminar una tienda
+  borra sus clientes, movimientos y usuarios; eliminar un cliente o un usuario
+  borra sus movimientos. No hay `is_active` en `users` (los usuarios se eliminan,
+  no se desactivan).
 - **Sin recuperación de contraseña por correo** ni cambio de contraseña propio del
   usuario (Better Auth ya lo soporta; falta exponerlo).
 - **Paginación/búsqueda de movimientos** no implementada (los listados cargan todo

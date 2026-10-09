@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Form, Link } from "react-router";
+import { Form, Link, redirect } from "react-router";
 import { sileo } from "sileo";
+import { DeleteConfirm } from "~/components/delete-confirm";
 import { MoneyInput } from "~/components/money-input";
 import { SubmitButton } from "~/components/submit-button";
 import { Card } from "~/components/ui/card";
@@ -15,7 +16,10 @@ import {
 } from "~/components/ui/select";
 import { authContext } from "~/context";
 import { getBusinessById } from "~/features/businesses/services/business.server";
-import { getCustomerById } from "~/features/customers/services/customer.server";
+import {
+  deleteCustomer,
+  getCustomerById,
+} from "~/features/customers/services/customer.server";
 import {
   correctLedgerEntry,
   createDebt,
@@ -26,7 +30,7 @@ import {
 } from "~/features/ledger/services/ledger.server";
 import { requireBusinessId } from "~/lib/business-context.server";
 import { formatCurrency, fromCents, toCents } from "~/lib/money";
-import { assertAuthenticated, assertPermission } from "~/lib/session.server";
+import { assertAuthenticated, assertPermission, assertSuperadmin } from "~/lib/session.server";
 import { DEFAULT_TIMEZONE } from "~/lib/time";
 import { formatDate } from "~/lib/utils";
 import type { Route } from "./+types/dashboard.customer";
@@ -62,7 +66,14 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 
   const timeZone = business?.timezone ?? DEFAULT_TIMEZONE;
 
-  return { customer, entries, balance, canAdjust, timeZone };
+  return {
+    customer,
+    entries,
+    balance,
+    canAdjust,
+    timeZone,
+    isSuperadmin: auth.isSuperadmin,
+  };
 }
 
 export async function action({
@@ -76,6 +87,14 @@ export async function action({
   const businessId = await requireBusinessId(request, auth);
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "create");
+
+  // Eliminar cliente (destructivo, solo Administrador Global). Fuera del `try`
+  // para que el redirect no lo capture el manejo de errores.
+  if (intent === "delete") {
+    assertSuperadmin(auth);
+    await deleteCustomer(businessId, params.customerId);
+    throw redirect("/dashboard/customers?flash=Cliente+eliminado");
+  }
 
   try {
     if (intent === "create") {
@@ -176,7 +195,8 @@ export default function CustomerDetail({
   loaderData,
   actionData,
 }: Route.ComponentProps) {
-  const { customer, entries, balance, canAdjust, timeZone } = loaderData;
+  const { customer, entries, balance, canAdjust, timeZone, isSuperadmin } =
+    loaderData;
 
   // Se incrementa tras registrar un movimiento para remontar el formulario y
   // dejar la UI limpia (el usuario no puede volver a enviar los mismos datos).
@@ -434,6 +454,33 @@ export default function CustomerDetail({
           )}
         </section>
       </div>
+
+      {isSuperadmin ? (
+        <Card className="gap-4 border-destructive/40 p-5">
+          <div>
+            <h2 className="text-base font-semibold text-destructive">
+              Zona de peligro
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Eliminar el cliente borra también todo su historial de
+              movimientos.
+            </p>
+          </div>
+          <DeleteConfirm
+            triggerLabel="Eliminar cliente"
+            title={`Eliminar «${customer.firstName} ${customer.lastName}»`}
+            confirmText={`${customer.firstName} ${customer.lastName}`}
+            fields={{ intent: "delete" }}
+            description={
+              <>
+                Se eliminarán en cascada{" "}
+                <strong>{entries.length} movimientos</strong> de este cliente.
+                Esta acción no se puede deshacer.
+              </>
+            }
+          />
+        </Card>
+      ) : null}
     </div>
   );
 }

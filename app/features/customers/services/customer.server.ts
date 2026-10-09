@@ -112,6 +112,20 @@ export async function desactivateCustomer(
   return updateCustomer(businessId, customerId, { isActive: false });
 }
 
+// Elimina definitivamente un cliente y, en cascada, todo su historial de
+// movimientos (`ledger_entries.customer_id` es ON DELETE CASCADE).
+// Operación destructiva: solo la ejecuta el Administrador Global.
+export async function deleteCustomer(
+  businessId: string,
+  customerId: string,
+): Promise<void> {
+  await db
+    .delete(customers)
+    .where(
+      and(eq(customers.id, customerId), eq(customers.businessId, businessId)),
+    );
+}
+
 // Utilidad para exportaciones/paginación futuras.
 export const customerOrder = (direction: "asc" | "desc" = "asc") =>
   direction === "asc" ? asc(customers.lastName) : desc(customers.lastName);

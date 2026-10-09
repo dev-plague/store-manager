@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
-import { Form, Link } from "react-router";
+import { Form, Link, redirect } from "react-router";
 import { sileo } from "sileo";
+import { DeleteConfirm } from "~/components/delete-confirm";
 import { SubmitButton } from "~/components/submit-button";
 import { Card } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -8,6 +9,8 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { authContext } from "~/context";
 import {
+  countUserLedgerEntries,
+  deleteBusinessUser,
   getBusinessUser,
   setBusinessUserPassword,
   setUserPermissions,
@@ -22,7 +25,7 @@ import {
   RESOURCE_LABELS,
   type Permission,
 } from "~/lib/permissions";
-import { assertAuthenticated, assertPermission } from "~/lib/session.server";
+import { assertAuthenticated, assertPermission, assertSuperadmin } from "~/lib/session.server";
 import type { Route } from "./+types/dashboard.user";
 
 export function meta(_: Route.MetaArgs) {
@@ -67,7 +70,11 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     }))
     .filter((group) => group.permissions.length > 0);
 
-  return { user, groups };
+  const movementCount = auth.isSuperadmin
+    ? await countUserLedgerEntries(businessId, params.userId)
+    : 0;
+
+  return { user, groups, isSuperadmin: auth.isSuperadmin, movementCount };
 }
 
 export async function action({
@@ -82,6 +89,18 @@ export async function action({
   const businessId = await requireBusinessId(request, auth);
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");
+
+  // Eliminar usuario (destructivo, solo Administrador Global). Fuera del `try`
+  // para que el redirect no lo capture el manejo de errores.
+  if (intent === "delete") {
+    assertSuperadmin(auth);
+    await deleteBusinessUser({
+      businessId,
+      userId: params.userId,
+      actingUserId: auth.user.id,
+    });
+    throw redirect("/dashboard/users?flash=Usuario+eliminado");
+  }
 
   try {
     if (intent === "update-name") {
@@ -147,7 +166,7 @@ export default function UserDetail({
   loaderData,
   actionData,
 }: Route.ComponentProps) {
-  const { user, groups } = loaderData;
+  const { user, groups, isSuperadmin, movementCount } = loaderData;
   const passwordFormRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -277,6 +296,33 @@ export default function UserDetail({
           vuelva a iniciar sesión.
         </p>
       </Card>
+
+      {isSuperadmin ? (
+        <Card className="gap-4 border-destructive/40 p-5">
+          <div>
+            <h2 className="text-base font-semibold text-destructive">
+              Zona de peligro
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Eliminar el usuario borra también los movimientos que registró en
+              esta tienda.
+            </p>
+          </div>
+          <DeleteConfirm
+            triggerLabel="Eliminar usuario"
+            title={`Eliminar «${user.name}»`}
+            confirmText={user.name}
+            fields={{ intent: "delete" }}
+            description={
+              <>
+                Se eliminarán en cascada{" "}
+                <strong>{movementCount} movimientos</strong> registrados por
+                este usuario. Esta acción no se puede deshacer.
+              </>
+            }
+          />
+        </Card>
+      ) : null}
     </div>
   );
 }
