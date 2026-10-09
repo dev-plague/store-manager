@@ -1,6 +1,11 @@
 import { Form } from "react-router";
+import { SubmitButton } from "~/components/submit-button";
+import { Card } from "~/components/ui/card";
 import { authContext } from "~/context";
-import { listBusinessesWithMetrics } from "~/features/businesses/services/business.server";
+import {
+  getBusinessById,
+  listBusinessesWithMetrics,
+} from "~/features/businesses/services/business.server";
 import {
   BalanceRankingChart,
   MonthlyFlowChart,
@@ -17,6 +22,7 @@ import {
 } from "~/lib/business-context.server";
 import { DEFAULT_CURRENCY, formatCurrency } from "~/lib/money";
 import { assertAuthenticated, assertPermission } from "~/lib/session.server";
+import { DEFAULT_TIMEZONE } from "~/lib/time";
 import type { Route } from "./+types/dashboard.home";
 
 export function meta(_: Route.MetaArgs) {
@@ -35,7 +41,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         getGlobalMetrics(),
         listBusinessesWithMetrics(),
         getActiveBusinessId(request, auth),
-        getMonthlyFlow(null),
+        getMonthlyFlow(null, 6, DEFAULT_TIMEZONE),
       ]);
 
     return {
@@ -50,11 +56,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   // Vista por tienda para usuarios normales.
   const businessId = await requireBusinessId(request, auth);
+  const business = await getBusinessById(businessId);
+  const timeZone = business?.timezone ?? DEFAULT_TIMEZONE;
 
   const [metrics, balances, monthlyFlow] = await Promise.all([
     getBusinessMetrics(businessId),
     listCustomerBalances(businessId),
-    getMonthlyFlow(businessId),
+    getMonthlyFlow(businessId, 6, timeZone),
   ]);
 
   const topDebtors = balances
@@ -92,10 +100,10 @@ function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border bg-card p-4 shadow-sm">
-      <h2 className="mb-3 text-sm font-semibold">{title}</h2>
+    <Card className="gap-3 p-4">
+      <h2 className="text-sm font-semibold">{title}</h2>
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -113,7 +121,10 @@ function GlobalPanel({
   const cards = [
     { label: "Tiendas", value: String(globalMetrics.businessCount) },
     { label: "Clientes", value: String(globalMetrics.customerCount) },
-    { label: "Deuda total", value: formatCurrency(globalMetrics.totalDebtCents, currency) },
+    {
+      label: "Deuda total",
+      value: formatCurrency(globalMetrics.totalDebtCents, currency),
+    },
     {
       label: "Abonos totales",
       value: formatCurrency(globalMetrics.totalPaymentCents, currency),
@@ -137,15 +148,12 @@ function GlobalPanel({
     <div className="space-y-6">
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {cards.map((card) => (
-          <div
-            key={card.label}
-            className="rounded-xl border bg-card p-4 shadow-sm"
-          >
+          <Card key={card.label} className="gap-1 p-4">
             <p className="text-xs font-medium text-muted-foreground">
               {card.label}
             </p>
-            <p className="mt-1 text-lg font-semibold">{card.value}</p>
-          </div>
+            <p className="text-lg font-semibold">{card.value}</p>
+          </Card>
         ))}
       </section>
 
@@ -162,56 +170,71 @@ function GlobalPanel({
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">Tiendas</h2>
         {businessList.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No hay tiendas registradas.
-          </p>
+          <Card className="p-6">
+            <p className="text-center text-sm text-muted-foreground">
+              No hay tiendas registradas.
+            </p>
+          </Card>
         ) : (
-          <ul className="divide-y rounded-xl border">
-            {businessList.map((business) => {
-              const isActive = business.id === activeBusinessId;
-              return (
-                <li
-                  key={business.id}
-                  className="flex items-center justify-between gap-3 p-3 text-sm"
-                >
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-2 font-medium">
-                      <span className="truncate">{business.name}</span>
-                      {isActive ? (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                          activa
-                        </span>
-                      ) : null}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {business.customerCount} clientes · pendiente{" "}
-                      {formatCurrency(business.outstandingCents, currency)}
-                    </p>
-                  </div>
-                  <Form method="post" action="/select-business">
-                    <input type="hidden" name="businessId" value={business.id} />
-                    <button
-                      type="submit"
-                      className="rounded-md border px-3 py-1.5 text-xs font-medium"
-                    >
-                      Gestionar
-                    </button>
-                  </Form>
-                </li>
-              );
-            })}
-          </ul>
+          <Card className="gap-0 p-0">
+            <ul className="divide-y">
+              {businessList.map((business) => {
+                const isActive = business.id === activeBusinessId;
+                return (
+                  <li
+                    key={business.id}
+                    className="flex items-center justify-between gap-3 p-3 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 font-medium">
+                        <span className="truncate">{business.name}</span>
+                        {isActive ? (
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                            activa
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {business.customerCount} clientes · pendiente{" "}
+                        {formatCurrency(business.outstandingCents, currency)}
+                      </p>
+                    </div>
+                    <Form method="post" action="/select-business">
+                      <input
+                        type="hidden"
+                        name="businessId"
+                        value={business.id}
+                      />
+                      <input
+                        type="hidden"
+                        name="redirectTo"
+                        value="/dashboard/customers"
+                      />
+                      <SubmitButton
+                        variant="outline"
+                        size="sm"
+                        pendingText="Abriendo…"
+                      >
+                        Gestionar
+                      </SubmitButton>
+                    </Form>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
         )}
 
         {activeBusinessId ? (
           <Form method="post" action="/select-business">
             <input type="hidden" name="businessId" value="" />
-            <button
-              type="submit"
-              className="text-xs text-muted-foreground underline"
+            <SubmitButton
+              variant="link"
+              pendingText="Quitando…"
+              className="h-auto p-0 text-xs text-muted-foreground"
             >
               Quitar tienda activa
-            </button>
+            </SubmitButton>
           </Form>
         ) : null}
       </section>
@@ -239,17 +262,14 @@ function BusinessPanel({
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {cards.map((card) => (
-          <div
-            key={card.label}
-            className="rounded-xl border bg-card p-4 shadow-sm"
-          >
+          <Card key={card.label} className="gap-1 p-4">
             <p className="text-xs font-medium text-muted-foreground">
               {card.label}
             </p>
-            <p className="mt-1 text-xl font-semibold">
+            <p className="text-xl font-semibold">
               {formatCurrency(card.value, currency)}
             </p>
-          </div>
+          </Card>
         ))}
       </div>
 

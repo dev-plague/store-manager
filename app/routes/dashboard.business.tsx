@@ -2,6 +2,12 @@ import { ArrowLeft } from "lucide-react";
 import { useEffect } from "react";
 import { Form, Link, redirect } from "react-router";
 import { sileo } from "sileo";
+import { SubmitButton } from "~/components/submit-button";
+import { Card } from "~/components/ui/card";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Separator } from "~/components/ui/separator";
 import { authContext } from "~/context";
 import {
   deleteBusiness,
@@ -129,7 +135,10 @@ export default function BusinessDetail({
     if (actionData.ok) {
       sileo.success({ title: actionData.message });
     } else {
-      sileo.error({ title: actionData.error });
+      sileo.error({
+        title: "Algo salió mal",
+        description: actionData.error,
+      });
     }
   }, [actionData]);
 
@@ -137,98 +146,114 @@ export default function BusinessDetail({
     <div className="mx-auto max-w-lg space-y-6">
       <Link
         to="/dashboard/businesses"
-        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground"
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" /> Volver
       </Link>
 
       <h1 className="text-xl font-bold">{business.name}</h1>
 
-      <Form method="post" className="space-y-5">
-        <input type="hidden" name="intent" value="update" />
+      <Card className="gap-4 p-5">
+        <Form method="post" className="space-y-5">
+          <input type="hidden" name="intent" value="update" />
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Nombre</span>
-          <input
-            name="name"
-            defaultValue={business.name}
-            required
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
-          />
-        </label>
-
-        {canEditGlobalFields ? (
-          <label className="flex flex-col gap-1.5">
-            <span className="text-base font-medium">Identificador (slug)</span>
-            <input
-              name="slug"
-              defaultValue={business.slug}
-              className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+          <div className="space-y-1.5">
+            <Label htmlFor="name" className="text-base">
+              Nombre
+            </Label>
+            <Input
+              id="name"
+              name="name"
+              defaultValue={business.name}
+              required
+              className="h-12 rounded-xl text-base"
             />
-          </label>
-        ) : null}
+          </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Moneda (ISO 4217)</span>
-          <input
-            name="currency"
-            defaultValue={business.currency}
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
-          />
-        </label>
+          {canEditGlobalFields ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="slug" className="text-base">
+                Identificador (slug)
+              </Label>
+              <Input
+                id="slug"
+                name="slug"
+                defaultValue={business.slug}
+                className="h-12 rounded-xl text-base"
+              />
+            </div>
+          ) : null}
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Zona horaria (IANA)</span>
-          <input
-            name="timezone"
-            defaultValue={business.timezone}
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
-          />
-        </label>
-
-        {canEditGlobalFields ? (
-          <label className="flex items-center gap-3 text-base">
-            <input
-              type="checkbox"
-              name="isActive"
-              value="true"
-              defaultChecked={business.isActive}
-              className="size-5"
+          <div className="space-y-1.5">
+            <Label htmlFor="currency" className="text-base">
+              Moneda (ISO 4217)
+            </Label>
+            <Input
+              id="currency"
+              name="currency"
+              defaultValue={business.currency}
+              className="h-12 rounded-xl text-base"
             />
-            <span>Tienda activa</span>
-          </label>
-        ) : null}
+          </div>
 
-        <button
-          type="submit"
-          className="w-full rounded-xl bg-primary px-4 py-3.5 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
-        >
-          Guardar cambios
-        </button>
-      </Form>
+          <div className="space-y-1.5">
+            <Label htmlFor="timezone" className="text-base">
+              Zona horaria (IANA)
+            </Label>
+            <Input
+              id="timezone"
+              name="timezone"
+              defaultValue={business.timezone}
+              className="h-12 rounded-xl text-base"
+            />
+          </div>
 
-      {canEditGlobalFields ? (
-        <Form
-          method="post"
-          onSubmit={(event) => {
-            if (
-              !window.confirm(
-                `¿Eliminar la tienda "${business.name}"? Esta acción no se puede deshacer.`,
-              )
-            ) {
-              event.preventDefault();
-            }
-          }}
-        >
-          <input type="hidden" name="intent" value="delete" />
-          <button
-            type="submit"
-            className="w-full rounded-xl border border-destructive/40 px-4 py-3 text-base font-medium text-destructive transition-colors hover:bg-destructive/10"
+          {canEditGlobalFields ? (
+            <Label className="items-center gap-3 text-base">
+              <Checkbox
+                name="isActive"
+                value="true"
+                defaultChecked={business.isActive}
+              />
+              <span>Tienda activa</span>
+            </Label>
+          ) : null}
+
+          <SubmitButton
+            pendingText="Guardando…"
+            className="h-12 w-full rounded-xl text-base"
           >
-            Eliminar tienda
-          </button>
+            Guardar cambios
+          </SubmitButton>
         </Form>
-      ) : null}
+
+        {canEditGlobalFields ? (
+          <>
+            <Separator />
+            <Form
+              method="post"
+              onSubmit={(event) => {
+                if (
+                  !window.confirm(
+                    `¿Eliminar la tienda "${business.name}"? Esta acción no se puede deshacer.`,
+                  )
+                ) {
+                  event.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="intent" value="delete" />
+              <SubmitButton
+                variant="destructive"
+                pendingText="Eliminando…"
+                className="h-12 w-full rounded-xl text-base"
+              >
+                Eliminar tienda
+              </SubmitButton>
+            </Form>
+          </>
+        ) : null}
+      </Card>
     </div>
   );
 }

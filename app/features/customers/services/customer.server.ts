@@ -105,7 +105,7 @@ export async function updateCustomer(
 }
 
 // Desactiva (borrado lógico) un cliente para preservar el historial contable.
-export async function deactivateCustomer(
+export async function desactivateCustomer(
   businessId: string,
   customerId: string,
 ): Promise<Customer | null> {

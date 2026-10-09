@@ -1,5 +1,8 @@
 import { Plus } from "lucide-react";
 import { Link } from "react-router";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
 import { authContext } from "~/context";
 import {
   getBusinessById,
@@ -38,23 +41,26 @@ export default function Businesses({ loaderData }: Route.ComponentProps) {
       <div className="space-y-5">
         <h1 className="text-xl font-bold">Mi tienda</h1>
         {loaderData.business ? (
-          <Link
-            to={`/dashboard/businesses/${loaderData.business.id}`}
-            className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-muted/60"
-          >
-            <span className="min-w-0">
-              <span className="block truncate text-base font-semibold">
-                {loaderData.business.name}
+          <Card className="gap-0 p-0">
+            <Link
+              to={`/dashboard/businesses/${loaderData.business.id}`}
+              className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/60"
+            >
+              <span className="min-w-0">
+                <span className="block truncate text-base font-semibold">
+                  {loaderData.business.name}
+                </span>
+                <span className="block text-sm text-muted-foreground">
+                  {loaderData.business.currency}
+                </span>
               </span>
-              <span className="block text-sm text-muted-foreground">
-                {loaderData.business.currency} ·{" "}
+              <Badge
+                variant={loaderData.business.isActive ? "default" : "destructive"}
+              >
                 {loaderData.business.isActive ? "activa" : "inactiva"}
-              </span>
-            </span>
-            <span className="shrink-0 text-sm font-medium text-primary">
-              Editar
-            </span>
-          </Link>
+              </Badge>
+            </Link>
+          </Card>
         ) : (
           <p className="text-base text-muted-foreground">
             No tienes una tienda asignada.
@@ -68,50 +74,50 @@ export default function Businesses({ loaderData }: Route.ComponentProps) {
     <div className="space-y-5">
       <h1 className="text-xl font-bold">Tiendas</h1>
 
-      <Link
-        to="/dashboard/businesses/new"
-        className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
-      >
-        <Plus className="size-5" /> Nueva tienda
-      </Link>
+      <Button asChild className="h-12 w-full rounded-xl text-base">
+        <Link to="/dashboard/businesses/new">
+          <Plus className="size-5" /> Nueva tienda
+        </Link>
+      </Button>
 
       {loaderData.businesses.length === 0 ? (
-        <p className="rounded-xl border bg-card p-6 text-center text-base text-muted-foreground shadow-sm">
-          Todavía no hay tiendas registradas.
-        </p>
+        <Card className="p-6">
+          <p className="text-center text-base text-muted-foreground">
+            Todavía no hay tiendas registradas.
+          </p>
+        </Card>
       ) : (
-        <ul className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm">
-          {loaderData.businesses.map((business) => (
-            <li key={business.id}>
-              <Link
-                to={`/dashboard/businesses/${business.id}`}
-                className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/60"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-base font-semibold">
-                    {business.name}
-                  </span>
-                  <span className="block text-sm text-muted-foreground">
-                    {business.currency} · pendiente{" "}
-                    {formatCurrency(
-                      business.outstandingCents,
-                      business.currency,
-                    )}
-                  </span>
-                </span>
-                <span
-                  className={
-                    business.isActive
-                      ? "shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
-                      : "shrink-0 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive"
-                  }
+        <Card className="gap-0 p-0">
+          <ul className="divide-y">
+            {loaderData.businesses.map((business) => (
+              <li key={business.id}>
+                <Link
+                  to={`/dashboard/businesses/${business.id}`}
+                  className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/60"
                 >
-                  {business.isActive ? "activa" : "inactiva"}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                  <span className="min-w-0">
+                    <span className="block truncate text-base font-semibold">
+                      {business.name}
+                    </span>
+                    <span className="block text-sm text-muted-foreground">
+                      {business.currency} · pendiente{" "}
+                      {formatCurrency(
+                        business.outstandingCents,
+                        business.currency,
+                      )}
+                    </span>
+                  </span>
+                  <Badge
+                    variant={business.isActive ? "default" : "destructive"}
+                    className="shrink-0"
+                  >
+                    {business.isActive ? "activa" : "inactiva"}
+                  </Badge>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
     </div>
   );

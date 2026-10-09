@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { authContext } from "~/context";
+import { getBusinessById } from "~/features/businesses/services/business.server";
 import { parseReportRange } from "~/features/reports/report-range";
 import {
   getCustomerReport,
@@ -9,6 +10,8 @@ import { requireBusinessId } from "~/lib/business-context.server";
 import { toCsv } from "~/lib/csv";
 import { fromCents } from "~/lib/money";
 import { assertAuthenticated, assertPermission } from "~/lib/session.server";
+import { DEFAULT_TIMEZONE } from "~/lib/time";
+import { formatDate } from "~/lib/utils";
 import type { Route } from "./+types/reports-export";
 
 // Ruta de recurso: descarga CSV de informes.
@@ -16,13 +19,6 @@ import type { Route } from "./+types/reports-export";
 
 function money(cents: number): string {
   return fromCents(cents).toFixed(2);
-}
-
-function formatDate(value: Date): string {
-  const date = new Date(value);
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  return `${date.getUTCFullYear()}-${month}-${day}`;
 }
 
 function csvResponse(csv: string, filename: string): Response {
@@ -43,7 +39,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const businessId = await requireBusinessId(request, auth);
   const url = new URL(request.url);
   const format = url.searchParams.get("format") ?? "movements";
-  const range = parseReportRange(url.searchParams);
+  const business = await getBusinessById(businessId);
+  const timeZone = business?.timezone ?? DEFAULT_TIMEZONE;
+  const range = parseReportRange(url.searchParams, timeZone);
 
   const customerIdRaw = url.searchParams.get("customerId");
   const customerId =
@@ -74,7 +72,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const csv = toCsv(
     ["Fecha", "Cliente", "Tipo", "Monto", "Descripción"],
     rows.map((row) => [
-      formatDate(row.createdAt),
+      formatDate(row.createdAt, timeZone),
       row.customerName,
       row.type === "DEBT" ? "Deuda" : "Abono",
       money(row.amountCents),

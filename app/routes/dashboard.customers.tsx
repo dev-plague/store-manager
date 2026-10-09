@@ -1,6 +1,9 @@
 import { Plus, Search, X } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { Button } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
 import { authContext } from "~/context";
 import { listCustomerBalances } from "~/features/metrics/services/metrics.server";
 import { requireBusinessId } from "~/lib/business-context.server";
@@ -50,74 +53,82 @@ export default function Customers({ loaderData }: Route.ComponentProps) {
       <h1 className="text-xl font-bold">Clientes</h1>
 
       {loaderData.canCreate ? (
-        <Link
-          to="/dashboard/customers/new"
-          className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+        <Button
+          asChild
+          className="h-12 w-full rounded-xl text-base"
         >
-          <Plus className="size-5" /> Nuevo cliente
-        </Link>
+          <Link to="/dashboard/customers/new">
+            <Plus className="size-5" /> Nuevo cliente
+          </Link>
+        </Button>
       ) : null}
 
       {/* Buscar por nombre (filtra la lista al escribir) */}
-      <div className="flex items-center gap-2 rounded-xl border bg-card px-3 shadow-sm focus-within:ring-2 focus-within:ring-ring">
-        <Search className="size-5 shrink-0 text-muted-foreground" />
-        <input
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-muted-foreground" />
+        <Input
           type="text"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Buscar por nombre"
           aria-label="Buscar cliente por nombre"
-          className="w-full bg-transparent py-3 text-base outline-none"
+          className="h-12 rounded-xl pr-12 pl-10 text-base"
         />
         {query ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setQuery("")}
             aria-label="Limpiar búsqueda"
-            className="shrink-0 text-muted-foreground"
+            className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground"
           >
-            <X className="size-5" />
-          </button>
+            <X className="size-4" />
+          </Button>
         ) : null}
       </div>
 
       {customers.length === 0 ? (
-        <p className="rounded-xl border bg-card p-6 text-center text-base text-muted-foreground shadow-sm">
-          {term
-            ? `Sin resultados para «${query.trim()}».`
-            : "Todavía no hay clientes. Toca «Nuevo cliente» para agregar el primero."}
-        </p>
+        <Card className="p-6">
+          <p className="text-center text-base text-muted-foreground">
+            {term
+              ? `Sin resultados para «${query.trim()}».`
+              : "Todavía no hay clientes. Toca «Nuevo cliente» para agregar el primero."}
+          </p>
+        </Card>
       ) : (
-        <ul className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm">
-          {customers.map((customer) => (
-            <li key={customer.id}>
-              <Link
-                to={`/dashboard/customers/${customer.id}`}
-                className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/60"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-base font-semibold">
-                    {customer.firstName} {customer.lastName}
-                  </span>
-                  {customer.phone ? (
-                    <span className="block truncate text-sm text-muted-foreground">
-                      {customer.phone}
-                    </span>
-                  ) : null}
-                </span>
-                <span
-                  className={
-                    customer.outstandingCents > 0
-                      ? "shrink-0 text-base font-semibold text-destructive"
-                      : "shrink-0 text-base font-semibold text-muted-foreground"
-                  }
+        <Card className="gap-0 p-0">
+          <ul className="divide-y">
+            {customers.map((customer) => (
+              <li key={customer.id}>
+                <Link
+                  to={`/dashboard/customers/${customer.id}`}
+                  className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/60"
                 >
-                  {formatCurrency(customer.outstandingCents)}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                  <span className="min-w-0">
+                    <span className="block truncate text-base font-semibold">
+                      {customer.firstName} {customer.lastName}
+                    </span>
+                    {customer.phone ? (
+                      <span className="block truncate text-sm text-muted-foreground">
+                        {customer.phone}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span
+                    className={
+                      customer.outstandingCents > 0
+                        ? "shrink-0 text-base font-semibold text-destructive"
+                        : "shrink-0 text-base font-semibold text-muted-foreground"
+                    }
+                  >
+                    {formatCurrency(customer.outstandingCents)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
     </div>
   );

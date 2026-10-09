@@ -1,5 +1,9 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CircleAlert } from "lucide-react";
 import { Form, Link, redirect } from "react-router";
+import { SubmitButton } from "~/components/submit-button";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { authContext } from "~/context";
 import { createBusinessUser } from "~/features/users/services/user.server";
 import { requireBusinessId } from "~/lib/business-context.server";
@@ -56,7 +60,7 @@ export default function UserNew({ actionData }: Route.ComponentProps) {
     <div className="mx-auto max-w-lg space-y-6">
       <Link
         to="/dashboard/users"
-        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground"
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" /> Volver
       </Link>
@@ -64,50 +68,63 @@ export default function UserNew({ actionData }: Route.ComponentProps) {
       <h1 className="text-xl font-bold">Nuevo usuario</h1>
 
       <Form method="post" className="space-y-5">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Nombre</span>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="name" className="text-base">
+            Nombre
+          </Label>
+          <Input
+            id="name"
             name="name"
             required
             autoFocus
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+            className="h-12 rounded-xl text-base"
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Correo electrónico</span>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="text-base">
+            Correo electrónico
+          </Label>
+          <Input
+            id="email"
             name="email"
             type="email"
             required
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+            className="h-12 rounded-xl text-base"
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Contraseña</span>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="password" className="text-base">
+            Contraseña
+          </Label>
+          <Input
+            id="password"
             name="password"
             type="password"
             required
             minLength={8}
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+            className="h-12 rounded-xl text-base"
           />
           <span className="text-sm text-muted-foreground">
             Mínimo 8 caracteres.
           </span>
-        </label>
+        </div>
 
         {actionData?.error ? (
-          <p className="text-base text-destructive">{actionData.error}</p>
+          <Alert variant="destructive">
+            <CircleAlert />
+            <AlertTitle>Algo salió mal</AlertTitle>
+            <AlertDescription>{actionData.error}</AlertDescription>
+          </Alert>
         ) : null}
 
-        <button
-          type="submit"
-          className="w-full rounded-xl bg-primary px-4 py-3.5 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+        <SubmitButton
+          pendingText="Guardando…"
+          className="h-12 w-full rounded-xl text-base"
         >
           Guardar usuario
-        </button>
+        </SubmitButton>
       </Form>
     </div>
   );

@@ -6,9 +6,17 @@ import {
   CustomerSearch,
   type CustomerSuggestion,
 } from "~/components/customer-search";
+import { SubmitButton } from "~/components/submit-button";
+import { Button } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { authContext } from "~/context";
 import { getBusinessById } from "~/features/businesses/services/business.server";
-import { getCustomerById, listCustomerOptions } from "~/features/customers/services/customer.server";
+import {
+  getCustomerById,
+  listCustomerOptions,
+} from "~/features/customers/services/customer.server";
 import { parseReportRange } from "~/features/reports/report-range";
 import {
   getCustomerReport,
@@ -18,18 +26,12 @@ import {
 import { requireBusinessId } from "~/lib/business-context.server";
 import { DEFAULT_CURRENCY, formatCurrency } from "~/lib/money";
 import { assertAuthenticated, assertPermission } from "~/lib/session.server";
+import { DEFAULT_TIMEZONE } from "~/lib/time";
+import { formatDate } from "~/lib/utils";
 import type { Route } from "./+types/dashboard.reports";
 
 export function meta(_: Route.MetaArgs) {
   return [{ title: "Informes · Gestor de Tienda" }];
-}
-
-// Formatea una fecha de forma determinista (evita desajustes de hidratación).
-function formatDate(value: Date): string {
-  const date = new Date(value);
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  return `${date.getUTCFullYear()}-${month}-${day}`;
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -39,7 +41,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   const businessId = await requireBusinessId(request, auth);
   const url = new URL(request.url);
-  const range = parseReportRange(url.searchParams);
+  const business = await getBusinessById(businessId);
+  const timeZone = business?.timezone ?? DEFAULT_TIMEZONE;
+  const range = parseReportRange(url.searchParams, timeZone);
 
   const customerIdRaw = url.searchParams.get("customerId");
   const customerId =
@@ -47,12 +51,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       ? customerIdRaw
       : null;
 
-  const [summary, movements, customerRows, business, selectedCustomer, customerOptions] =
+  const [summary, movements, customerRows, selectedCustomer, customerOptions] =
     await Promise.all([
       getReportSummary(businessId, range, customerId),
       listReportMovements(businessId, range, customerId),
       getCustomerReport(businessId, range, customerId),
-      getBusinessById(businessId),
       customerId
         ? getCustomerById(businessId, customerId)
         : Promise.resolve(null),
@@ -66,6 +69,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     fromParam: range.fromParam,
     toParam: range.toParam,
     currency: business?.currency ?? DEFAULT_CURRENCY,
+    timeZone,
     customerId,
     selectedCustomerName: selectedCustomer
       ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
@@ -73,10 +77,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     customerOptions,
   };
 }
-
-// Botón solo con icono (compacto y accesible).
-const iconButtonClass =
-  "grid size-11 shrink-0 place-items-center rounded-xl border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground";
 
 type ReportTab = "customers" | "movements";
 
@@ -88,6 +88,7 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
     fromParam,
     toParam,
     currency,
+    timeZone,
     customerId,
     selectedCustomerName,
     customerOptions,
@@ -120,13 +121,6 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
     { label: "Pendiente", value: summary.outstandingCents, money: true },
   ];
 
-  const tabClass = (active: boolean) =>
-    `rounded-lg px-3 py-2.5 text-base font-semibold transition-colors ${
-      active
-        ? "bg-primary text-primary-foreground shadow-sm"
-        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-    }`;
-
   return (
     <div className="space-y-6">
       {/* Encabezado + acción de filtros */}
@@ -137,76 +131,82 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
             Del {fromParam} al {toParam}
           </p>
         </div>
-        <button
+        <Button
           type="button"
+          variant={showFilters ? "default" : "outline"}
+          size="icon"
           onClick={() => setShowFilters((value) => !value)}
           aria-label="Filtros"
           aria-expanded={showFilters}
           title="Filtros"
-          className={
-            showFilters
-              ? "grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm"
-              : iconButtonClass
-          }
+          className="size-11 rounded-xl"
         >
           <SlidersHorizontal className="size-5" />
-        </button>
+        </Button>
       </div>
 
       {/* Búsqueda por cliente (autocompletado) */}
       {selectedCustomerName ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border bg-card p-3 shadow-sm">
+        <Card className="flex-row items-center justify-between gap-3 p-3">
           <span className="min-w-0 truncate text-base">
             Cliente: <strong>{selectedCustomerName}</strong>
           </span>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="icon"
             onClick={clearCustomer}
             aria-label="Quitar filtro de cliente"
             title="Quitar filtro de cliente"
-            className={iconButtonClass}
+            className="size-11 shrink-0 rounded-xl"
           >
             <X className="size-5" />
-          </button>
-        </div>
+          </Button>
+        </Card>
       ) : (
         <CustomerSearch customers={customerOptions} onSelect={applyCustomer} />
       )}
 
       {/* Filtros colapsables */}
       {showFilters ? (
-        <Form
-          method="get"
-          className="space-y-3 rounded-xl border bg-card p-4 shadow-sm"
-        >
-          {customerId ? (
-            <input type="hidden" name="customerId" value={customerId} />
-          ) : null}
-          <label className="flex flex-col gap-1.5">
-            <span className="text-base font-medium">Desde</span>
-            <input
-              type="date"
-              name="from"
-              defaultValue={fromParam}
-              className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-base font-medium">Hasta</span>
-            <input
-              type="date"
-              name="to"
-              defaultValue={toParam}
-              className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-primary px-4 py-3 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
-          >
-            Aplicar rango
-          </button>
-        </Form>
+        <Card className="gap-3 p-4">
+          <Form method="get" className="space-y-3">
+            {customerId ? (
+              <input type="hidden" name="customerId" value={customerId} />
+            ) : null}
+            <div className="space-y-1.5">
+              <label htmlFor="from" className="text-base font-medium">
+                Desde
+              </label>
+              <Input
+                id="from"
+                type="date"
+                name="from"
+                defaultValue={fromParam}
+                className="h-12 rounded-xl text-base"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="to" className="text-base font-medium">
+                Hasta
+              </label>
+              <Input
+                id="to"
+                type="date"
+                name="to"
+                defaultValue={toParam}
+                className="h-12 rounded-xl text-base"
+              />
+            </div>
+            <SubmitButton
+              mode="any"
+              pendingText="Aplicando…"
+              className="h-12 w-full rounded-xl text-base"
+            >
+              Aplicar rango
+            </SubmitButton>
+          </Form>
+        </Card>
       ) : null}
 
       {/* Resumen */}
@@ -214,82 +214,66 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
         <h2 className="text-base font-semibold">Resumen</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {summaryItems.map((item) => (
-            <div
-              key={item.label}
-              className="rounded-xl border bg-card p-3 shadow-sm"
-            >
+            <Card key={item.label} className="gap-1 p-3">
               <p className="text-xs font-medium text-muted-foreground">
                 {item.label}
               </p>
-              <p className="mt-1 text-base font-semibold">
+              <p className="text-base font-semibold">
                 {item.money
                   ? formatCurrency(Number(item.value), currency)
                   : item.value}
               </p>
-            </div>
+            </Card>
           ))}
         </div>
       </section>
 
       {/* Tabs: por cliente / movimientos */}
-      <section className="space-y-3">
-        <div
-          role="tablist"
-          aria-label="Detalle del informe"
-          className="grid grid-cols-2 gap-1 rounded-xl border bg-card p-1 shadow-sm"
-        >
-          <button
-            type="button"
-            role="tab"
-            id="tab-customers"
-            aria-selected={tab === "customers"}
-            aria-controls="panel-customers"
-            onClick={() => setTab("customers")}
-            className={tabClass(tab === "customers")}
-          >
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as ReportTab)}
+        className="space-y-3"
+      >
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="customers">
             Por cliente ({customerRows.length})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="tab-movements"
-            aria-selected={tab === "movements"}
-            aria-controls="panel-movements"
-            onClick={() => setTab("movements")}
-            className={tabClass(tab === "movements")}
-          >
+          </TabsTrigger>
+          <TabsTrigger value="movements">
             Movimientos ({movements.length})
-          </button>
-        </div>
+          </TabsTrigger>
+        </TabsList>
 
-        {tab === "customers" ? (
-          <div
-            role="tabpanel"
-            id="panel-customers"
-            aria-labelledby="tab-customers"
-            className="space-y-3"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-muted-foreground">
-                {customerRows.length} cliente
-                {customerRows.length === 1 ? "" : "s"} con movimientos
-              </span>
+        <TabsContent value="customers" className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-muted-foreground">
+              {customerRows.length} cliente
+              {customerRows.length === 1 ? "" : "s"} con movimientos
+            </span>
+            <Button
+              asChild
+              variant="outline"
+              size="icon"
+              className="size-11 rounded-xl"
+            >
               <a
                 href={`${exportBase}&format=customers`}
                 aria-label="Descargar por cliente (CSV)"
                 title="Descargar por cliente (CSV)"
-                className={iconButtonClass}
               >
                 <Users className="size-5" />
               </a>
-            </div>
+            </Button>
+          </div>
 
-            {customerRows.length === 0 ? (
-              <p className="rounded-xl border bg-card p-6 text-center text-base text-muted-foreground shadow-sm">
+          {customerRows.length === 0 ? (
+            <Card className="p-6">
+              <p className="text-center text-base text-muted-foreground">
                 Sin movimientos en el período.
               </p>
-            ) : (
-              <ul className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm">
+            </Card>
+          ) : (
+            <Card className="gap-0 p-0">
+              <ul className="divide-y">
                 {customerRows.map((row) => (
                   <li key={row.customerId} className="space-y-1 p-4">
                     <div className="flex items-center justify-between gap-3">
@@ -313,36 +297,41 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
                   </li>
                 ))}
               </ul>
-            )}
-          </div>
-        ) : (
-          <div
-            role="tabpanel"
-            id="panel-movements"
-            aria-labelledby="tab-movements"
-            className="space-y-3"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-muted-foreground">
-                {movements.length} movimiento
-                {movements.length === 1 ? "" : "s"}
-              </span>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="movements" className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-muted-foreground">
+              {movements.length} movimiento
+              {movements.length === 1 ? "" : "s"}
+            </span>
+            <Button
+              asChild
+              variant="outline"
+              size="icon"
+              className="size-11 rounded-xl"
+            >
               <a
                 href={`${exportBase}&format=movements`}
                 aria-label="Descargar movimientos (CSV)"
                 title="Descargar movimientos (CSV)"
-                className={iconButtonClass}
               >
                 <Receipt className="size-5" />
               </a>
-            </div>
+            </Button>
+          </div>
 
-            {movements.length === 0 ? (
-              <p className="rounded-xl border bg-card p-6 text-center text-base text-muted-foreground shadow-sm">
+          {movements.length === 0 ? (
+            <Card className="p-6">
+              <p className="text-center text-base text-muted-foreground">
                 Sin movimientos en el período.
               </p>
-            ) : (
-              <ul className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm">
+            </Card>
+          ) : (
+            <Card className="gap-0 p-0">
+              <ul className="divide-y">
                 {movements.map((movement) => (
                   <li
                     key={movement.id}
@@ -353,7 +342,7 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
                         {movement.customerName}
                       </span>
                       <span className="block truncate text-sm text-muted-foreground">
-                        {formatDate(movement.createdAt)}
+                        {formatDate(movement.createdAt, timeZone)}
                         {movement.description
                           ? ` · ${movement.description}`
                           : ""}
@@ -372,10 +361,10 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
                   </li>
                 ))}
               </ul>
-            )}
-          </div>
-        )}
-      </section>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

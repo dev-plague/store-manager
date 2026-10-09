@@ -1,6 +1,7 @@
 import { and, asc, count, eq, gte, isNull, sql } from "drizzle-orm";
 import { db } from "~/db/client.server";
 import { businesses, customers, ledgerEntries } from "~/db/schema";
+import { DEFAULT_TIMEZONE, getTimeZoneOffsetMs } from "~/lib/time";
 import type {
   BusinessMetrics,
   CustomerWithBalance,
@@ -95,22 +96,33 @@ const MONTH_LABELS = [
   "dic",
 ];
 
-// Flujo mensual de los últimos `months` meses.
-// Si `businessId` es null, agrega todas las tiendas (vista del Superadmin).
+// Flujo mensual de los últimos `months` meses, agrupado por mes LOCAL de la
+// tienda (`timeZone`). Si `businessId` es null, agrega todas las tiendas.
 export async function getMonthlyFlow(
   businessId: string | null,
   months = 6,
+  timeZone = DEFAULT_TIMEZONE,
 ): Promise<MonthlyFlowPoint[]> {
-  const start = new Date();
-  start.setDate(1);
-  start.setHours(0, 0, 0, 0);
-  start.setMonth(start.getMonth() - (months - 1));
+  const now = new Date();
+  const offset = getTimeZoneOffsetMs(timeZone, now);
 
-  const rows = await db
+  // "Ahora" en el reloj local, representado con métodos UTC para hacer
+  // aritmética de calendario independiente de la zona del servidor.
+  const localNow = new Date(now.getTime() + offset);
+  const startLocal = new Date(
+    Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth() - (months - 1), 1),
+  );
+  const start = new Date(startLocal.getTime() - offset);
+
+  // Se calcula el mes local en una subconsulta (el parámetro de zona aparece una
+  // sola vez) y se agrupa por esa columna en la consulta externa.
+  const localMonth = sql`date_trunc('month', ${ledgerEntries.createdAt} AT TIME ZONE ${timeZone})`;
+
+  const entriesWithMonth = db
     .select({
-      month: sql<string>`to_char(date_trunc('month', ${ledgerEntries.createdAt}), 'YYYY-MM')`,
-      debt: sql<string>`coalesce(sum(case when ${ledgerEntries.type} = 'DEBT' then ${ledgerEntries.amount} else 0 end), 0)::bigint`,
-      payment: sql<string>`coalesce(sum(case when ${ledgerEntries.type} = 'PAYMENT' then ${ledgerEntries.amount} else 0 end), 0)::bigint`,
+      month: localMonth.as("month"),
+      type: ledgerEntries.type,
+      amount: ledgerEntries.amount,
     })
     .from(ledgerEntries)
     .where(
@@ -121,23 +133,37 @@ export async function getMonthlyFlow(
         isNull(ledgerEntries.reversalOfId),
       ),
     )
-    .groupBy(sql`date_trunc('month', ${ledgerEntries.createdAt})`)
-    .orderBy(sql`date_trunc('month', ${ledgerEntries.createdAt})`);
+    .as("entries_with_month");
+
+  const rows = await db
+    .select({
+      month: sql<string>`to_char(${entriesWithMonth.month}, 'YYYY-MM')`,
+      debt: sql<string>`coalesce(sum(case when ${entriesWithMonth.type} = 'DEBT' then ${entriesWithMonth.amount} else 0 end), 0)::bigint`,
+      payment: sql<string>`coalesce(sum(case when ${entriesWithMonth.type} = 'PAYMENT' then ${entriesWithMonth.amount} else 0 end), 0)::bigint`,
+    })
+    .from(entriesWithMonth)
+    .groupBy(entriesWithMonth.month)
+    .orderBy(entriesWithMonth.month);
 
   const byMonth = new Map(rows.map((row) => [row.month, row]));
 
   // Se rellenan los meses sin movimientos para que la gráfica sea continua.
   const points: MonthlyFlowPoint[] = [];
   for (let index = 0; index < months; index++) {
-    const date = new Date(start);
-    date.setMonth(start.getMonth() + index);
+    const date = new Date(
+      Date.UTC(
+        startLocal.getUTCFullYear(),
+        startLocal.getUTCMonth() + index,
+        1,
+      ),
+    );
 
-    const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const month = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
     const row = byMonth.get(month);
 
     points.push({
       month,
-      label: `${MONTH_LABELS[date.getMonth()]} ${String(date.getFullYear()).slice(2)}`,
+      label: `${MONTH_LABELS[date.getUTCMonth()]} ${String(date.getUTCFullYear()).slice(2)}`,
       debtCents: Number(row?.debt ?? 0),
       paymentCents: Number(row?.payment ?? 0),
     });

@@ -1,8 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Form, Link } from "react-router";
 import { sileo } from "sileo";
-import { authContext } from "~/context";
 import { MoneyInput } from "~/components/money-input";
+import { SubmitButton } from "~/components/submit-button";
+import { Card } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import { authContext } from "~/context";
+import { getBusinessById } from "~/features/businesses/services/business.server";
 import { getCustomerById } from "~/features/customers/services/customer.server";
 import {
   correctLedgerEntry,
@@ -15,6 +27,8 @@ import {
 import { requireBusinessId } from "~/lib/business-context.server";
 import { formatCurrency, fromCents, toCents } from "~/lib/money";
 import { assertAuthenticated, assertPermission } from "~/lib/session.server";
+import { DEFAULT_TIMEZONE } from "~/lib/time";
+import { formatDate } from "~/lib/utils";
 import type { Route } from "./+types/dashboard.customer";
 
 export function meta(_: Route.MetaArgs) {
@@ -24,14 +38,6 @@ export function meta(_: Route.MetaArgs) {
 type ActionResult =
   | { ok: true; message: string }
   | { ok: false; error: string };
-
-// Formatea una fecha de forma determinista (evita desajustes de hidratación).
-function formatDate(value: Date): string {
-  const date = new Date(value);
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  return `${date.getUTCFullYear()}-${month}-${day}`;
-}
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
   const auth = context.get(authContext);
@@ -45,15 +51,18 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     throw new Response("Cliente no encontrado.", { status: 404 });
   }
 
-  const [entries, balance] = await Promise.all([
+  const [entries, balance, business] = await Promise.all([
     listCustomerLedger(businessId, customer.id),
     getCustomerBalance(businessId, customer.id),
+    getBusinessById(businessId),
   ]);
 
   const canAdjust =
     auth.isSuperadmin || auth.permissions.has("ledger:adjust");
 
-  return { customer, entries, balance, canAdjust };
+  const timeZone = business?.timezone ?? DEFAULT_TIMEZONE;
+
+  return { customer, entries, balance, canAdjust, timeZone };
 }
 
 export async function action({
@@ -167,14 +176,24 @@ export default function CustomerDetail({
   loaderData,
   actionData,
 }: Route.ComponentProps) {
-  const { customer, entries, balance, canAdjust } = loaderData;
+  const { customer, entries, balance, canAdjust, timeZone } = loaderData;
+
+  // Se incrementa tras registrar un movimiento para remontar el formulario y
+  // dejar la UI limpia (el usuario no puede volver a enviar los mismos datos).
+  const [createFormKey, setCreateFormKey] = useState(0);
 
   useEffect(() => {
     if (!actionData) return;
     if (actionData.ok) {
       sileo.success({ title: actionData.message });
+      if (actionData.message === "Movimiento registrado.") {
+        setCreateFormKey((key) => key + 1);
+      }
     } else {
-      sileo.error({ title: actionData.error });
+      sileo.error({
+        title: "Algo salió mal",
+        description: actionData.error,
+      });
     }
   }, [actionData]);
 
@@ -211,175 +230,210 @@ export default function CustomerDetail({
         </div>
       </div>
 
-      <section className="space-y-3">
-        <h2 className="text-base font-semibold">Registrar movimiento</h2>
-        <Form
-          method="post"
-          className="space-y-3 rounded-xl border bg-card p-4 shadow-sm"
-        >
-          <input type="hidden" name="intent" value="create" />
-          <label className="flex flex-col gap-1.5">
-            <span className="text-base font-medium">
-              ¿Qué deseas registrar?
-            </span>
-            <select
-              name="type"
-              defaultValue="DEBT"
-              className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="DEBT">Deuda (fiado)</option>
-              <option value="PAYMENT">Abono (pago)</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-base font-medium">Monto</span>
-            <MoneyInput
-              name="amount"
-              placeholder="0"
-              required
-              className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-base font-medium">
-              Descripción (opcional)
-            </span>
-            <input
-              name="description"
-              className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-primary px-4 py-3.5 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
-          >
-            Guardar movimiento
-          </button>
-        </Form>
-      </section>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+        <section className="space-y-3 lg:sticky lg:top-32 lg:self-start">
+          <h2 className="text-base font-semibold">Registrar movimiento</h2>
+          <Card className="gap-3 p-4">
+            <Form key={createFormKey} method="post" className="space-y-3">
+              <input type="hidden" name="intent" value="create" />
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="movement-type"
+                  className="text-base"
+                >
+                  ¿Qué deseas registrar?
+                </Label>
+                <Select name="type" defaultValue="DEBT">
+                  <SelectTrigger
+                    id="movement-type"
+                    className="h-12 w-full rounded-xl text-base"
+                  >
+                    <SelectValue placeholder="Tipo de movimiento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DEBT">Deuda (fiado)</SelectItem>
+                    <SelectItem value="PAYMENT">Abono (pago)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-base">Monto</Label>
+                <MoneyInput
+                  name="amount"
+                  placeholder="0"
+                  required
+                  className="h-12 rounded-xl text-base"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="movement-description" className="text-base">
+                  Descripción (opcional)
+                </Label>
+                <Input
+                  id="movement-description"
+                  name="description"
+                  className="h-12 rounded-xl text-base"
+                />
+              </div>
+              <SubmitButton
+                pendingText="Guardando…"
+                className="h-12 w-full rounded-xl text-base"
+              >
+                Guardar movimiento
+              </SubmitButton>
+            </Form>
+          </Card>
+        </section>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Historial</h2>
-        {entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Sin movimientos registrados.
-          </p>
-        ) : (
-          <ul className="divide-y rounded-xl border">
-            {entries.map((entry) => {
-              const isVoided = Boolean(entry.voidedAt);
-              const isReversal = Boolean(entry.reversalOfId);
-              const canAdjustEntry = canAdjust && !isVoided && !isReversal;
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold">Historial</h2>
+          {entries.length === 0 ? (
+            <Card className="p-6">
+              <p className="text-center text-sm text-muted-foreground">
+                Sin movimientos registrados.
+              </p>
+            </Card>
+          ) : (
+            <Card className="gap-0 p-0">
+              <ul className="divide-y">
+                {entries.map((entry) => {
+                  const isVoided = Boolean(entry.voidedAt);
+                  const isReversal = Boolean(entry.reversalOfId);
+                  const canAdjustEntry = canAdjust && !isVoided && !isReversal;
 
-              return (
-                <li key={entry.id} className="space-y-2 p-4 text-base">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p
-                        className={
-                          isVoided
-                            ? "font-medium text-muted-foreground line-through"
-                            : "font-medium"
-                        }
-                      >
-                        {entry.type === "DEBT" ? "Deuda" : "Abono"}
-                        {isReversal ? " (anulación)" : ""}
-                      </p>
-                      {entry.description ? (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {entry.description}
-                        </p>
+                  return (
+                    <li key={entry.id} className="space-y-2 p-4 text-base">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p
+                            className={
+                              isVoided
+                                ? "font-medium text-muted-foreground line-through"
+                                : "font-medium"
+                            }
+                          >
+                            {entry.type === "DEBT" ? "Deuda" : "Abono"}
+                            {isReversal ? " (anulación)" : ""}
+                          </p>
+                          {entry.description ? (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {entry.description}
+                            </p>
+                          ) : null}
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(entry.createdAt, timeZone)}
+                            {isVoided ? " · anulado" : ""}
+                          </p>
+                        </div>
+                        <span
+                          className={
+                            isVoided
+                              ? "text-muted-foreground line-through"
+                              : entry.type === "DEBT"
+                                ? "text-destructive"
+                                : "text-emerald-600"
+                          }
+                        >
+                          {entry.type === "DEBT" ? "+" : "−"}
+                          {formatCurrency(entry.amount)}
+                        </span>
+                      </div>
+
+                      {canAdjustEntry ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Form
+                            method="post"
+                            onSubmit={(event) => {
+                              if (
+                                !window.confirm(
+                                  "¿Anular este movimiento? Se registrará un contra-asiento.",
+                                )
+                              ) {
+                                event.preventDefault();
+                              }
+                            }}
+                          >
+                            <input type="hidden" name="intent" value="void" />
+                            <input
+                              type="hidden"
+                              name="entryId"
+                              value={entry.id}
+                            />
+                            <SubmitButton
+                              variant="outline"
+                              size="sm"
+                              pendingText="Anulando…"
+                            >
+                              Anular
+                            </SubmitButton>
+                          </Form>
+
+                          <details className="w-full">
+                            <summary className="cursor-pointer text-xs text-muted-foreground">
+                              Corregir
+                            </summary>
+                            <Form
+                              method="post"
+                              className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-4"
+                            >
+                              <input
+                                type="hidden"
+                                name="intent"
+                                value="correct"
+                              />
+                              <input
+                                type="hidden"
+                                name="entryId"
+                                value={entry.id}
+                              />
+                              <Select
+                                name="type"
+                                defaultValue={entry.type}
+                              >
+                                <SelectTrigger
+                                  size="sm"
+                                  className="w-full rounded-lg text-sm"
+                                  aria-label="Tipo de movimiento"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="DEBT">Deuda</SelectItem>
+                                  <SelectItem value="PAYMENT">Abono</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <MoneyInput
+                                name="amount"
+                                defaultValue={Math.round(
+                                  fromCents(entry.amount),
+                                )}
+                                required
+                                className="rounded-lg text-sm"
+                              />
+                              <Input
+                                name="description"
+                                defaultValue={entry.description ?? ""}
+                                placeholder="Descripción"
+                                className="rounded-lg text-sm"
+                              />
+                              <SubmitButton
+                                size="sm"
+                                pendingText="Guardando…"
+                              >
+                                Guardar corrección
+                              </SubmitButton>
+                            </Form>
+                          </details>
+                        </div>
                       ) : null}
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(entry.createdAt)}
-                        {isVoided ? " · anulado" : ""}
-                      </p>
-                    </div>
-                    <span
-                      className={
-                        isVoided
-                          ? "text-muted-foreground line-through"
-                          : entry.type === "DEBT"
-                            ? "text-destructive"
-                            : "text-emerald-600"
-                      }
-                    >
-                      {entry.type === "DEBT" ? "+" : "−"}
-                      {formatCurrency(entry.amount)}
-                    </span>
-                  </div>
-
-                  {canAdjustEntry ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Form method="post">
-                        <input type="hidden" name="intent" value="void" />
-                        <input
-                          type="hidden"
-                          name="entryId"
-                          value={entry.id}
-                        />
-                        <button
-                          type="submit"
-                          className="rounded-md border px-2.5 py-1 text-xs font-medium"
-                        >
-                          Anular
-                        </button>
-                      </Form>
-
-                      <details className="w-full">
-                        <summary className="cursor-pointer text-xs text-muted-foreground">
-                          Corregir
-                        </summary>
-                        <Form
-                          method="post"
-                          className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-4"
-                        >
-                          <input
-                            type="hidden"
-                            name="intent"
-                            value="correct"
-                          />
-                          <input
-                            type="hidden"
-                            name="entryId"
-                            value={entry.id}
-                          />
-                          <select
-                            name="type"
-                            defaultValue={entry.type}
-                            className="rounded-lg border bg-background px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            <option value="DEBT">Deuda</option>
-                            <option value="PAYMENT">Abono</option>
-                          </select>
-                          <MoneyInput
-                            name="amount"
-                            defaultValue={Math.round(fromCents(entry.amount))}
-                            required
-                            className="rounded-lg border bg-background px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-ring"
-                          />
-                          <input
-                            name="description"
-                            defaultValue={entry.description ?? ""}
-                            placeholder="Descripción"
-                            className="rounded-lg border bg-background px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-ring"
-                          />
-                          <button
-                            type="submit"
-                            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-                          >
-                            Guardar corrección
-                          </button>
-                        </Form>
-                      </details>
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

@@ -78,6 +78,7 @@ técnico.
 | ORM | **Drizzle ORM** + **Drizzle Kit** | `^0.45.3` / `^0.31.11` |
 | Driver SQL | `pg` (node-postgres) | `^8.23.1` |
 | Estilos | **Tailwind CSS v4** (Mobile-First) + tokens de **shadcn/ui** | `^4.3.3` |
+| Componentes UI | **shadcn/ui** (new-york) + primitivos **radix-ui** | `^1.7.0` |
 | Notificaciones | **sileo** (toasts) | `^0.1.5` |
 | Gráficas | **Recharts** | `^3.10.1` |
 | Validación | **Zod** | `^4.6.5` |
@@ -164,7 +165,7 @@ librería).
 | `name` | text | obligatorio |
 | `slug` | text | obligatorio, **único** |
 | `currency` | text | ISO 4217, por defecto `"COP"` |
-| `timezone` | text | IANA, por defecto `"UTC"` |
+| `timezone` | text | IANA, por defecto `"America/Bogota"` (Colombia, UTC-5) |
 | `is_active` | boolean | por defecto `true` |
 | `created_at`, `updated_at` | timestamptz | |
 
@@ -293,6 +294,17 @@ FK hacia `users` (`user_id` y `granted_by`), por lo que se usa `relationName`
 - `businesses.currency` permite otras monedas a futuro (los totales globales hoy
   asumen COP).
 
+### Zona horaria
+
+- Los instantes se guardan en UTC (`timestamptz`), pero la aplicación opera en
+  **Colombia (UTC-5)**.
+- `businesses.timezone` (IANA, por defecto `America/Bogota`) define la zona para
+  los **límites de día/mes** de los informes, la **agrupación del flujo mensual**
+  y el **formato de fechas** mostradas.
+- La conversión se concentra en `app/lib/time.ts`; un movimiento registrado a las
+  23:30 hora local cuenta en ese día (no en el siguiente) aunque en UTC ya sea
+  otro día.
+
 ---
 
 ## 7. Autenticación y autorización (RBAC granular)
@@ -330,7 +342,7 @@ type AuthContext = {
 | `assertAuthenticated(ctx)` | Si no hay sesión → `redirect("/login")` |
 | `assertPermission(ctx, perm)` | Si falta el permiso (y no es Superadmin) → `403` |
 | `assertSuperadmin(ctx)` | Si no es Superadmin → `403` |
-| `requireBusinessId(request, ctx)` | Resuelve la tienda activa o redirige a `/dashboard` |
+| `requireBusinessId(request, ctx)` | Resuelve la tienda activa o redirige al selector de tienda (Superadmin) / 403 (usuario sin tienda) |
 
 ### Superadmin y "tienda activa"
 
@@ -377,7 +389,9 @@ store-manager/
 │   │   ├── mobile-nav.tsx      # Barra de navegación inferior (móvil)
 │   │   ├── customer-search.tsx # Búsqueda de clientes con autocompletado
 │   │   ├── flash-toast.tsx     # Notificación de éxito tras un redirect (?flash=)
-│   │   └── ui/                 # (shadcn/ui se genera aquí: components/ui/*)
+│   │   ├── submit-button.tsx   # Botón con spinner + bloqueo anti doble-envío
+│   │   ├── theme-toggle.tsx    # Tema claro/oscuro/sistema (+ script anti-flash)
+│   │   └── ui/                 # shadcn/ui: button, card, input, label, select, …
 │   │
 │   ├── db/
 │   │   ├── client.server.ts    # Pool de pg + instancia Drizzle (singleton en dev)
@@ -412,8 +426,9 @@ store-manager/
 │   │   ├── permissions.ts          # Catálogo de permisos
 │   │   ├── env.server.ts           # Validación de entorno con Zod
 │   │   ├── money.ts                # Centavos ↔ decimal, formato de moneda
+│   │   ├── time.ts                 # Zona horaria (America/Bogota): día/mes, formato
 │   │   ├── csv.ts                  # Generación de CSV
-│   │   └── utils.ts                # cn() para shadcn
+│   │   └── utils.ts                # cn(), safeRedirect(), formatDate()
 │   │
 │   ├── types/index.ts          # Tipos de dominio (inferidos del esquema + DTOs)
 │   │
@@ -452,7 +467,7 @@ Configuradas explícitamente en `app/routes.ts`.
 | `/login` | `login.tsx` | público | Inicio de sesión (redirige si ya hay sesión) |
 | `/logout` | `logout.tsx` | — | Cierra sesión (POST) |
 | `/.well-known/appspecific/com.chrome.devtools.json` | `well-known.devtools.ts` | público | Responde 204 (silencia la petición de Chrome) |
-| `/select-business` | `select-business.tsx` | Superadmin | Fija/limpia la tienda activa (cookie) |
+| `/select-business` | `select-business.tsx` | Superadmin | Selector de **tienda activa** (cookie `sm_active_business`); conserva `?redirectTo=` para volver al módulo solicitado |
 | `/dashboard` | `dashboard.home.tsx` | `metrics:read` | Panel: métricas y gráficas (global o por tienda) |
 | `/dashboard/customers` | `dashboard.customers.tsx` | `customers:read` | Lista de clientes (+ botón «Nuevo cliente») |
 | `/dashboard/customers/new` | `dashboard.customer-new.tsx` | `customers:create` | Alta de cliente |
@@ -529,7 +544,7 @@ reciben `businessId` para el aislamiento.
 ### `customers` (`customer.server.ts`)
 
 `listCustomers(businessId, search?)`, `getCustomerById`, `createCustomer`,
-`updateCustomer`, `deactivateCustomer` (borrado lógico).
+`updateCustomer`, `desactivateCustomer` (borrado lógico).
 
 ### `ledger` (`ledger.server.ts`)
 
@@ -570,9 +585,11 @@ reciben `businessId` para el aislamiento.
 
 - **Tailwind CSS v4** con variables de tema en `app/app.css` (tokens de shadcn:
   `--background`, `--foreground`, `--primary`, `--chart-1..5`, modo oscuro, etc.).
-- **shadcn/ui** está configurado (`components.json`, `cn()` en `lib/utils.ts`) pero
-  los componentes concretos se generan cuando los necesites:
-  `bunx shadcn@latest add button card input`.
+- **shadcn/ui** (estilo *new-york*, Tailwind v4): los componentes base viven en
+  `components/ui/*` (`button`, `card`, `input`, `label`, `select`, `checkbox`,
+  `badge`, `tabs`, `alert`, `separator`) y se usan en toda la UI en lugar de
+  elementos nativos. Los primitivos accesibles vienen del paquete unificado
+  `radix-ui`. Para añadir más: `bun x shadcn@latest add dialog`.
 - **Mobile-First**: layouts de una columna que escalan con `sm:`/`lg:`; tablas con
   scroll horizontal cuando aplica.
 - **Notificaciones (sileo)**: el `<Toaster />` vive en `root.tsx`. Las rutas usan
@@ -590,6 +607,18 @@ reciben `businessId` para el aislamiento.
   Se usa en informes para filtrar el reporte por un cliente.
 - **Tema**: color de marca (verde/emerald) en `--primary` y `--ring`; cabecera
   sticky con blur y navegación tipo *pill* con el estado activo resaltado.
+- **Modo claro/oscuro/sistema**: `components/theme-toggle.tsx` alterna la
+  preferencia, la guarda en `localStorage` y la aplica antes de pintar mediante
+  un script en `root.tsx` (sin destellos). El `<Toaster>` usa `theme="system"`.
+- **Envíos seguros (`components/submit-button.tsx`)**: los botones se
+  deshabilitan y muestran un spinner mientras hay una acción en curso, y los
+  formularios se limpian tras el éxito. Evita registros duplicados por doble
+  pulsación (deudas, abonos, correcciones, altas, contraseñas).
+- **Progreso de navegación**: una barra fina superior indica que hay una
+  navegación/carga en curso.
+- **Escritorio más amplio**: el panel usa `max-w-5xl`, navegación con icono +
+  etiqueta y el detalle del cliente se divide en dos columnas (formulario fijo +
+  historial).
 - **Navegación responsiva**: en escritorio, tabs superiores; en móvil
   (`< sm`) una **barra inferior flotante** con iconos + etiqueta y el ítem activo
   resaltado (`components/mobile-nav.tsx`, oculta con `sm:hidden`). Los ítems se
@@ -617,6 +646,9 @@ reciben `businessId` para el aislamiento.
   la UI sin lanzar errores de navegación.
 - **Errores HTTP**: los servicios lanzan `Response` (p. ej. `throw new Response("...", { status: 400 })`)
   para 400/403/404; las rutas pueden capturarlos y convertirlos en mensajes.
+- **Redirecciones seguras**: los destinos que vienen de la URL/formulario (p. ej.
+  `?redirectTo=`) se validan con `safeRedirect()` (`lib/utils.ts`) para permitir
+  solo rutas internas y evitar *open redirect*.
 
 ---
 
@@ -630,6 +662,7 @@ reciben `businessId` para el aislamiento.
 | `0000_flashy_spot.sql` | Esquema inicial: 8 tablas, enum, FKs, índices y CHECK `amount > 0` |
 | `0001_lucky_doctor_doom.sql` | `businesses.currency` por defecto `"COP"` |
 | `0002_vengeful_carnage.sql` | `ledger_entries`: `voided_at`, `voided_by`, `reversal_of_id` + índice |
+| `0003_bright_hitman.sql` | `businesses.timezone` por defecto `"America/Bogota"` (+ migra `"UTC"` existentes) |
 
 - `drizzle/meta/` guarda snapshots y el journal.
 
@@ -749,7 +782,7 @@ Credenciales: `admin@store-manager.local / superadmin1234` y
 ### Añadir un componente shadcn
 
 ```bash
-bunx shadcn@latest add button card dialog
+bun x shadcn@latest add button card dialog
 ```
 
 ---
@@ -762,8 +795,12 @@ bunx shadcn@latest add button card dialog
   `ctx.password.hash` + `ctx.internalAdapter.updatePassword` (lo mismo que hace el
   plugin `admin`) para no introducir roles rígidos. Depende de una API interna de
   Better Auth; si cambia, hay que revisar `setBusinessUserPassword`.
-- **Rangos de fecha en UTC.** Los informes usan límites UTC (`created_at >= from AND < to`);
-  los bordes de mes/día no se ajustan aún a la zona horaria de la tienda.
+- **Zona horaria de la tienda.** Los instantes se guardan en UTC (`timestamptz`),
+  pero los límites de día/mes de los informes, la agrupación del flujo mensual y
+  las fechas mostradas se calculan en la zona de la tienda (`businesses.timezone`,
+  por defecto `America/Bogota` = UTC-5, sin horario de verano). Las utilidades
+  viven en `lib/time.ts` y las usan `report-range.ts`, `metrics.server.ts` y
+  `formatDate`.
 - **Totales globales asumen una sola moneda.** Si coexisten tiendas con monedas
   distintas, los agregados globales no convierten; hoy todo es COP.
 - **No hay borrado de usuarios.** Por la FK `created_by` con `RESTRICT`, un usuario

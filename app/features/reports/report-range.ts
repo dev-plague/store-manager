@@ -1,6 +1,16 @@
 // Rango de fechas para informes.
-// Se trabaja en UTC con `to` como límite EXCLUSIVO (inicio del día siguiente),
-// de modo que las consultas usan `created_at >= from AND created_at < to`.
+//
+// Los días son locales a la zona de la tienda (por defecto Colombia, UTC-5).
+// Se usa `to` como límite EXCLUSIVO (medianoche local del día siguiente), de
+// modo que las consultas usan `created_at >= from AND created_at < to`.
+
+import {
+  addDaysToDateString,
+  DEFAULT_TIMEZONE,
+  firstDayOfMonthInTimeZone,
+  todayInTimeZone,
+  zonedStartOfDay,
+} from "~/lib/time";
 
 export type ReportRange = {
   from: Date;
@@ -11,22 +21,23 @@ export type ReportRange = {
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function toIsoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-// Rango por defecto: desde el primer día del mes actual hasta hoy.
-export function defaultReportRange(): { fromParam: string; toParam: string } {
-  const now = new Date();
-  const firstDay = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-  );
-  return { fromParam: toIsoDate(firstDay), toParam: toIsoDate(now) };
+// Rango por defecto: desde el primer día del mes actual hasta hoy (en la zona).
+export function defaultReportRange(timeZone = DEFAULT_TIMEZONE): {
+  fromParam: string;
+  toParam: string;
+} {
+  return {
+    fromParam: firstDayOfMonthInTimeZone(timeZone),
+    toParam: todayInTimeZone(timeZone),
+  };
 }
 
 // Parsea `from`/`to` de la query, con validación y valores por defecto.
-export function parseReportRange(params: URLSearchParams): ReportRange {
-  const defaults = defaultReportRange();
+export function parseReportRange(
+  params: URLSearchParams,
+  timeZone = DEFAULT_TIMEZONE,
+): ReportRange {
+  const defaults = defaultReportRange(timeZone);
 
   let fromParam = params.get("from") ?? defaults.fromParam;
   let toParam = params.get("to") ?? defaults.toParam;
@@ -39,9 +50,8 @@ export function parseReportRange(params: URLSearchParams): ReportRange {
     [fromParam, toParam] = [toParam, fromParam];
   }
 
-  const from = new Date(`${fromParam}T00:00:00.000Z`);
-  const to = new Date(`${toParam}T00:00:00.000Z`);
-  to.setUTCDate(to.getUTCDate() + 1);
+  const from = zonedStartOfDay(fromParam, timeZone);
+  const to = zonedStartOfDay(addDaysToDateString(toParam, 1), timeZone);
 
   return { from, to, fromParam, toParam };
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Input } from "~/components/ui/input";
 
 // Entrada de dinero con formato visual de miles (convención Colombia: punto).
 //
@@ -39,7 +40,7 @@ export function MoneyInput({
   return (
     <>
       {/* Campo visible: formateado, sin `name` (no se envía). */}
-      <input
+      <Input
         type="text"
         inputMode="numeric"
         autoComplete="off"

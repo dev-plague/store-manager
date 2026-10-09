@@ -1,5 +1,9 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CircleAlert } from "lucide-react";
 import { Form, Link, redirect } from "react-router";
+import { SubmitButton } from "~/components/submit-button";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { authContext } from "~/context";
 import { createCustomer } from "~/features/customers/services/customer.server";
 import { requireBusinessId } from "~/lib/business-context.server";
@@ -52,7 +56,7 @@ export default function CustomerNew({ actionData }: Route.ComponentProps) {
     <div className="mx-auto max-w-lg space-y-6">
       <Link
         to="/dashboard/customers"
-        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground"
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" /> Volver
       </Link>
@@ -60,53 +64,69 @@ export default function CustomerNew({ actionData }: Route.ComponentProps) {
       <h1 className="text-xl font-bold">Nuevo cliente</h1>
 
       <Form method="post" className="space-y-5">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Nombre</span>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="firstName" className="text-base">
+            Nombre
+          </Label>
+          <Input
+            id="firstName"
             name="firstName"
             required
             autoFocus
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+            className="h-12 rounded-xl text-base"
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Apellido</span>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="lastName" className="text-base">
+            Apellido
+          </Label>
+          <Input
+            id="lastName"
             name="lastName"
             required
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+            className="h-12 rounded-xl text-base"
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Teléfono (opcional)</span>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="phone" className="text-base">
+            Teléfono (opcional)
+          </Label>
+          <Input
+            id="phone"
             name="phone"
             inputMode="tel"
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+            className="h-12 rounded-xl text-base"
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Correo (opcional)</span>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="text-base">
+            Correo (opcional)
+          </Label>
+          <Input
+            id="email"
             name="email"
             type="email"
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+            className="h-12 rounded-xl text-base"
           />
-        </label>
+        </div>
 
         {actionData?.error ? (
-          <p className="text-base text-destructive">{actionData.error}</p>
+          <Alert variant="destructive">
+            <CircleAlert />
+            <AlertTitle>Algo salió mal</AlertTitle>
+            <AlertDescription>{actionData.error}</AlertDescription>
+          </Alert>
         ) : null}
 
-        <button
-          type="submit"
-          className="w-full rounded-xl bg-primary px-4 py-3.5 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+        <SubmitButton
+          pendingText="Guardando…"
+          className="h-12 w-full rounded-xl text-base"
         >
           Guardar cliente
-        </button>
+        </SubmitButton>
       </Form>
     </div>
   );

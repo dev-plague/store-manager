@@ -1,5 +1,9 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CircleAlert } from "lucide-react";
 import { Form, Link, redirect } from "react-router";
+import { SubmitButton } from "~/components/submit-button";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { authContext } from "~/context";
 import { createBusiness } from "~/features/businesses/services/business.server";
 import {
@@ -72,7 +76,7 @@ export default function BusinessNew({ actionData }: Route.ComponentProps) {
     <div className="mx-auto max-w-lg space-y-6">
       <Link
         to="/dashboard/businesses"
-        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground"
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" /> Volver
       </Link>
@@ -80,56 +84,70 @@ export default function BusinessNew({ actionData }: Route.ComponentProps) {
       <h1 className="text-xl font-bold">Nueva tienda</h1>
 
       <Form method="post" className="space-y-5">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Nombre de la tienda</span>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="name" className="text-base">
+            Nombre de la tienda
+          </Label>
+          <Input
+            id="name"
             name="name"
             required
             autoFocus
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+            className="h-12 rounded-xl text-base"
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">
+        <div className="space-y-1.5">
+          <Label htmlFor="slug" className="text-base">
             Identificador (sin espacios)
-          </span>
-          <input
+          </Label>
+          <Input
+            id="slug"
             name="slug"
             required
             placeholder="mi-tienda"
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+            className="h-12 rounded-xl text-base"
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Moneda</span>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="currency" className="text-base">
+            Moneda
+          </Label>
+          <Input
+            id="currency"
             name="currency"
             defaultValue="COP"
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+            className="h-12 rounded-xl text-base"
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium">Zona horaria</span>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="timezone" className="text-base">
+            Zona horaria
+          </Label>
+          <Input
+            id="timezone"
             name="timezone"
             defaultValue="America/Bogota"
-            className="rounded-xl border bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+            className="h-12 rounded-xl text-base"
           />
-        </label>
+        </div>
 
         {actionData?.error ? (
-          <p className="text-base text-destructive">{actionData.error}</p>
+          <Alert variant="destructive">
+            <CircleAlert />
+            <AlertTitle>Algo salió mal</AlertTitle>
+            <AlertDescription>{actionData.error}</AlertDescription>
+          </Alert>
         ) : null}
 
-        <button
-          type="submit"
-          className="w-full rounded-xl bg-primary px-4 py-3.5 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+        <SubmitButton
+          pendingText="Guardando…"
+          className="h-12 w-full rounded-xl text-base"
         >
           Guardar tienda
-        </button>
+        </SubmitButton>
       </Form>
     </div>
   );

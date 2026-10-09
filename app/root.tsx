@@ -8,6 +8,7 @@ import {
   ScrollRestoration,
 } from "react-router";
 import { Toaster } from "sileo";
+import { themeInitScript } from "~/components/theme-toggle";
 import type { Route } from "./+types/root";
 import "./app.css";
 
@@ -29,7 +30,7 @@ export const links: Route.LinksFunction = () => [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -40,13 +41,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
           content="default"
         />
         <meta name="apple-mobile-web-app-title" content="Tienda" />
+        {/* Aplica el tema antes de pintar para evitar destellos. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <Meta />
         <Links />
       </head>
       <body>
         {children}
         {/* Notificaciones (sileo). */}
-        <Toaster position="top-right" />
+        <Toaster position="top-center" theme="system" />
         <ScrollRestoration />
         <Scripts />
       </body>

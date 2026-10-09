@@ -1,4 +1,11 @@
+import { CircleAlert } from "lucide-react";
 import { Form, redirect } from "react-router";
+import { SubmitButton } from "~/components/submit-button";
+import { ThemeToggle } from "~/components/theme-toggle";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Card } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { auth } from "~/lib/auth.server";
 import { getAuthContext } from "~/lib/session.server";
 import type { Route } from "./+types/login";
@@ -43,13 +50,17 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Login({ actionData }: Route.ComponentProps) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center p-6">
-      <div className="space-y-6 rounded-2xl border bg-card p-6 shadow-sm">
+    <main className="relative mx-auto flex min-h-screen max-w-sm flex-col justify-center p-6">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
+      <Card className="gap-6 p-6 sm:p-8">
         <header className="space-y-1">
-          <span className="grid size-10 place-items-center rounded-xl bg-primary text-sm font-bold text-primary-foreground">
+          <span className="grid size-12 place-items-center rounded-2xl bg-primary text-base font-bold text-primary-foreground shadow-sm">
             ST
           </span>
-          <h1 className="pt-2 text-2xl font-bold tracking-tight">
+          <h1 className="pt-3 text-2xl font-bold tracking-tight">
             Iniciar sesión
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -58,40 +69,51 @@ export default function Login({ actionData }: Route.ComponentProps) {
         </header>
 
         <Form method="post" className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium">Correo electrónico</span>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-base">
+              Correo electrónico
+            </Label>
+            <Input
+              id="email"
               type="email"
               name="email"
               autoComplete="email"
               required
-              className="rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
+              autoFocus
+              className="h-12 rounded-xl text-base"
             />
-          </label>
+          </div>
 
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium">Contraseña</span>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="password" className="text-base">
+              Contraseña
+            </Label>
+            <Input
+              id="password"
               type="password"
               name="password"
               autoComplete="current-password"
               required
-              className="rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
+              className="h-12 rounded-xl text-base"
             />
-          </label>
+          </div>
 
           {actionData?.error ? (
-            <p className="text-sm text-destructive">{actionData.error}</p>
+            <Alert variant="destructive">
+              <CircleAlert />
+              <AlertTitle>Algo salió mal</AlertTitle>
+              <AlertDescription>{actionData.error}</AlertDescription>
+            </Alert>
           ) : null}
 
-          <button
-            type="submit"
-            className="rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          <SubmitButton
+            pendingText="Entrando…"
+            className="h-12 rounded-xl text-base"
           >
             Entrar
-          </button>
+          </SubmitButton>
         </Form>
-      </div>
+      </Card>
     </main>
   );
 }

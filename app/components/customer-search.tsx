@@ -1,5 +1,7 @@
 import { Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 
 export type CustomerSuggestion = {
   id: string;
@@ -61,9 +63,9 @@ export function CustomerSearch({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex items-center gap-2 rounded-xl border bg-card px-3 shadow-sm focus-within:ring-2 focus-within:ring-ring">
-        <Search className="size-5 shrink-0 text-muted-foreground" />
-        <input
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-muted-foreground" />
+        <Input
           type="text"
           value={query}
           onChange={(event) => {
@@ -80,31 +82,34 @@ export function CustomerSearch({
           }}
           placeholder={placeholder}
           aria-label={placeholder}
-          className="w-full bg-transparent py-3 text-base outline-none"
+          className="h-12 rounded-xl pr-12 pl-10 text-base"
         />
         {query ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={() => {
               setQuery("");
               setOpen(false);
             }}
             aria-label="Limpiar búsqueda"
-            className="shrink-0 text-muted-foreground"
+            className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground"
           >
-            <X className="size-5" />
-          </button>
+            <X className="size-4" />
+          </Button>
         ) : null}
       </div>
 
       {open && results.length > 0 ? (
-        <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-xl border bg-card shadow-lg">
+        <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-xl border bg-popover shadow-lg">
           {results.map((customer) => (
             <li key={customer.id}>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => choose(customer)}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-base transition-colors hover:bg-muted"
+                className="h-auto w-full justify-between gap-3 rounded-none px-4 py-3 text-left text-base font-normal"
               >
                 <span className="min-w-0 truncate font-medium">
                   {customer.name}
@@ -114,14 +119,14 @@ export function CustomerSearch({
                     {customer.phone}
                   </span>
                 ) : null}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       ) : null}
 
       {open && term.length >= 2 && results.length === 0 ? (
-        <div className="absolute z-20 mt-1 w-full rounded-xl border bg-card px-4 py-3 text-base text-muted-foreground shadow-lg">
+        <div className="absolute z-20 mt-1 w-full rounded-xl border bg-popover px-4 py-3 text-base text-muted-foreground shadow-lg">
           Sin resultados
         </div>
       ) : null}

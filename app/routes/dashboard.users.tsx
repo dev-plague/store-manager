@@ -1,5 +1,8 @@
 import { Plus } from "lucide-react";
 import { Link } from "react-router";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
 import { authContext } from "~/context";
 import { getBusinessById } from "~/features/businesses/services/business.server";
 import { listBusinessUsers } from "~/features/users/services/user.server";
@@ -37,40 +40,43 @@ export default function Users({ loaderData }: Route.ComponentProps) {
         ) : null}
       </h1>
 
-      <Link
-        to="/dashboard/users/new"
-        className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
-      >
-        <Plus className="size-5" /> Nuevo usuario
-      </Link>
+      <Button asChild className="h-12 w-full rounded-xl text-base">
+        <Link to="/dashboard/users/new">
+          <Plus className="size-5" /> Nuevo usuario
+        </Link>
+      </Button>
 
       {loaderData.users.length === 0 ? (
-        <p className="rounded-xl border bg-card p-6 text-center text-base text-muted-foreground shadow-sm">
-          Todavía no hay usuarios en esta tienda.
-        </p>
+        <Card className="p-6">
+          <p className="text-center text-base text-muted-foreground">
+            Todavía no hay usuarios en esta tienda.
+          </p>
+        </Card>
       ) : (
-        <ul className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm">
-          {loaderData.users.map((user) => (
-            <li key={user.id}>
-              <Link
-                to={`/dashboard/users/${user.id}`}
-                className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/60"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-base font-semibold">
-                    {user.name}
+        <Card className="gap-0 p-0">
+          <ul className="divide-y">
+            {loaderData.users.map((user) => (
+              <li key={user.id}>
+                <Link
+                  to={`/dashboard/users/${user.id}`}
+                  className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/60"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-base font-semibold">
+                      {user.name}
+                    </span>
+                    <span className="block truncate text-sm text-muted-foreground">
+                      {user.email}
+                    </span>
                   </span>
-                  <span className="block truncate text-sm text-muted-foreground">
-                    {user.email}
-                  </span>
-                </span>
-                <span className="shrink-0 text-sm text-muted-foreground">
-                  {user.permissions.length} permisos
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                  <Badge variant="secondary" className="shrink-0">
+                    {user.permissions.length} permisos
+                  </Badge>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
     </div>
   );

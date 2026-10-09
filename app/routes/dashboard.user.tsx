@@ -1,6 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Form, Link } from "react-router";
 import { sileo } from "sileo";
+import { SubmitButton } from "~/components/submit-button";
+import { Card } from "~/components/ui/card";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { authContext } from "~/context";
 import {
   getBusinessUser,
@@ -143,116 +148,135 @@ export default function UserDetail({
   actionData,
 }: Route.ComponentProps) {
   const { user, groups } = loaderData;
+  const passwordFormRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (!actionData) return;
     if (actionData.ok) {
       sileo.success({ title: actionData.message });
+      // Limpia los campos de contraseña tras restablecerla.
+      passwordFormRef.current?.reset();
     } else {
-      sileo.error({ title: actionData.error });
+      sileo.error({
+        title: "Algo salió mal",
+        description: actionData.error,
+      });
     }
   }, [actionData]);
 
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/dashboard/users" className="text-xs text-muted-foreground">
+        <Link
+          to="/dashboard/users"
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
           ← Usuarios
         </Link>
         <h1 className="text-lg font-semibold">{user.name}</h1>
         <p className="text-sm text-muted-foreground">{user.email}</p>
       </div>
 
-      <section className="space-y-3">
+      <Card className="gap-4 p-5">
         <h2 className="text-sm font-semibold">Nombre</h2>
         <Form method="post" className="flex flex-col gap-3 sm:flex-row">
           <input type="hidden" name="intent" value="update-name" />
-          <input
+          <Input
             name="name"
             defaultValue={user.name}
             required
-            className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            aria-label="Nombre del usuario"
+            className="h-12 flex-1 rounded-xl text-base"
           />
-          <button
-            type="submit"
-            className="rounded-lg border px-4 py-2 text-sm font-medium"
+          <SubmitButton
+            variant="outline"
+            pendingText="Guardando…"
+            className="h-12 rounded-xl px-5 text-base"
           >
             Guardar
-          </button>
+          </SubmitButton>
         </Form>
-      </section>
+      </Card>
 
-      <section className="space-y-3">
+      <Card className="gap-4 p-5">
         <h2 className="text-sm font-semibold">Permisos</h2>
         <Form method="post" className="space-y-4">
           <input type="hidden" name="intent" value="save-permissions" />
 
           {groups.map((group) => (
-            <fieldset key={group.resource} className="rounded-xl border p-3">
+            <fieldset
+              key={group.resource}
+              className="rounded-xl border p-4"
+            >
               <legend className="px-1 text-xs font-semibold text-muted-foreground">
                 {group.label}
               </legend>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {group.permissions.map((permission) => (
-                  <label
+                  <Label
                     key={permission.key}
-                    className="flex items-center gap-2 text-sm"
+                    className="items-center gap-2.5 text-base font-normal"
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       name="permissions"
                       value={permission.key}
                       defaultChecked={permission.granted}
-                      className="size-4"
                     />
                     <span>{permission.label}</span>
-                  </label>
+                  </Label>
                 ))}
               </div>
             </fieldset>
           ))}
 
-          <button
-            type="submit"
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+          <SubmitButton
+            pendingText="Guardando…"
+            className="h-12 rounded-xl px-5 text-base"
           >
             Guardar permisos
-          </button>
+          </SubmitButton>
         </Form>
-      </section>
+      </Card>
 
-      <section className="space-y-3">
+      <Card className="gap-4 p-5">
         <h2 className="text-sm font-semibold">Restablecer contraseña</h2>
-        <Form method="post" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Form
+          method="post"
+          ref={passwordFormRef}
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+        >
           <input type="hidden" name="intent" value="set-password" />
-          <input
+          <Input
             name="newPassword"
             type="password"
             placeholder="Nueva contraseña (mínimo 8)"
             required
             minLength={8}
-            className="rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            aria-label="Nueva contraseña"
+            className="h-12 rounded-xl text-base"
           />
-          <input
+          <Input
             name="confirmPassword"
             type="password"
             placeholder="Confirmar contraseña"
             required
             minLength={8}
-            className="rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            aria-label="Confirmar contraseña"
+            className="h-12 rounded-xl text-base"
           />
-          <button
-            type="submit"
-            className="rounded-lg border px-4 py-2 text-sm font-medium sm:col-span-2"
+          <SubmitButton
+            variant="outline"
+            pendingText="Actualizando…"
+            className="h-12 rounded-xl text-base sm:col-span-2"
           >
             Actualizar contraseña
-          </button>
+          </SubmitButton>
         </Form>
         <p className="text-xs text-muted-foreground">
           Al restablecerla se cierran las sesiones activas del usuario para que
           vuelva a iniciar sesión.
         </p>
-      </section>
+      </Card>
     </div>
   );
 }

@@ -46,7 +46,9 @@ export function clearActiveBusinessCookie(): Promise<string> {
   return activeBusinessCookie.serialize("", { maxAge: 0 });
 }
 
-// Resuelve la tienda activa; si falta, redirige al panel global para elegirla.
+// Resuelve la tienda activa; si falta, envía al selector de tienda conservando
+// el destino original para volver allí tras elegir (evita el rebote confuso al
+// dashboard que veía el Administrador Global).
 export async function requireBusinessId(
   request: Request,
   auth: AuthContext,
@@ -54,7 +56,24 @@ export async function requireBusinessId(
   const businessId = await getActiveBusinessId(request, auth);
 
   if (!businessId) {
-    throw redirect("/dashboard");
+    // El selector de tienda es exclusivo del Administrador Global. Un usuario
+    // normal sin tienda asignada es una cuenta mal configurada: se le informa
+    // en lugar de redirigir (evita un bucle de redirecciones).
+    if (!auth.isSuperadmin) {
+      throw new Response(
+        "Tu usuario no tiene una tienda asignada. Contacta al administrador.",
+        { status: 403 },
+      );
+    }
+
+    const url = new URL(request.url);
+    // En navegaciones de cliente React Router pide los datos a `path.data`;
+    // se elimina ese sufijo para conservar la ruta real de destino.
+    const pathname = url.pathname.replace(/\.data$/, "");
+    const redirectTo = `${pathname}${url.search}`;
+    throw redirect(
+      `/select-business?redirectTo=${encodeURIComponent(redirectTo)}`,
+    );
   }
 
   return businessId;

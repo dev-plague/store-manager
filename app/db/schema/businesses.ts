@@ -8,8 +8,8 @@ export const businesses = pgTable("businesses", {
   slug: text("slug").notNull().unique(),
   // Código ISO 4217 de la moneda (ej: "COP", "USD", "MXN").
   currency: text("currency").notNull().default("COP"),
-  // Zona horaria IANA para reportes.
-  timezone: text("timezone").notNull().default("UTC"),
+  // Zona horaria IANA para reportes (por defecto Colombia, UTC-5).
+  timezone: text("timezone").notNull().default("America/Bogota"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
