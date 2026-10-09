@@ -4,11 +4,13 @@ import { Link } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
+import { UserAvatar } from "~/components/user-avatar";
 import { authContext } from "~/context";
 import { listCustomerBalances } from "~/features/metrics/services/metrics.server";
 import { requireBusinessId } from "~/lib/business-context.server";
 import { formatCurrency } from "~/lib/money";
 import { assertAuthenticated, assertPermission } from "~/lib/session.server";
+import { cn } from "~/lib/utils";
 import type { Route } from "./+types/dashboard.customers";
 
 export function meta(_: Route.MetaArgs) {
@@ -103,24 +105,27 @@ export default function Customers({ loaderData }: Route.ComponentProps) {
               <li key={customer.id}>
                 <Link
                   to={`/dashboard/customers/${customer.id}`}
-                  className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/60"
+                  className="flex items-center gap-3 p-4 transition-colors hover:bg-muted/60"
                 >
-                  <span className="min-w-0">
+                  <UserAvatar
+                    name={`${customer.firstName} ${customer.lastName}`}
+                    className="size-11 text-base"
+                  />
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-semibold">
                       {customer.firstName} {customer.lastName}
                     </span>
-                    {customer.phone ? (
-                      <span className="block truncate text-sm text-muted-foreground">
-                        {customer.phone}
-                      </span>
-                    ) : null}
+                    <span className="block truncate text-sm text-muted-foreground">
+                      {customer.phone ?? "Sin teléfono"}
+                    </span>
                   </span>
                   <span
-                    className={
+                    className={cn(
+                      "shrink-0 rounded-full px-3 py-1 text-sm font-semibold",
                       customer.outstandingCents > 0
-                        ? "shrink-0 text-base font-semibold text-destructive"
-                        : "shrink-0 text-base font-semibold text-muted-foreground"
-                    }
+                        ? "bg-rose-100 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300"
+                        : "bg-muted text-muted-foreground",
+                    )}
                   >
                     {formatCurrency(customer.outstandingCents)}
                   </span>

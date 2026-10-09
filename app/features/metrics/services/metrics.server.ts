@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { db } from "~/db/client.server";
 import { businesses, customers, ledgerEntries } from "~/db/schema";
 import { DEFAULT_TIMEZONE, getTimeZoneOffsetMs } from "~/lib/time";
@@ -170,6 +170,53 @@ export async function getMonthlyFlow(
   }
 
   return points;
+}
+
+// Movimiento reciente para la actividad del panel.
+export type RecentMovement = {
+  id: string;
+  type: "DEBT" | "PAYMENT";
+  amountCents: number;
+  description: string | null;
+  createdAt: Date;
+  customerName: string;
+};
+
+// Últimos movimientos vigentes de la tienda (con el nombre del cliente).
+export async function listRecentMovements(
+  businessId: string,
+  limit = 6,
+): Promise<RecentMovement[]> {
+  const rows = await db
+    .select({
+      id: ledgerEntries.id,
+      type: ledgerEntries.type,
+      amount: ledgerEntries.amount,
+      description: ledgerEntries.description,
+      createdAt: ledgerEntries.createdAt,
+      firstName: customers.firstName,
+      lastName: customers.lastName,
+    })
+    .from(ledgerEntries)
+    .innerJoin(customers, eq(customers.id, ledgerEntries.customerId))
+    .where(
+      and(
+        eq(ledgerEntries.businessId, businessId),
+        isNull(ledgerEntries.voidedAt),
+        isNull(ledgerEntries.reversalOfId),
+      ),
+    )
+    .orderBy(desc(ledgerEntries.createdAt))
+    .limit(limit);
+
+  return rows.map((row) => ({
+    id: row.id,
+    type: row.type,
+    amountCents: row.amount,
+    description: row.description,
+    createdAt: row.createdAt,
+    customerName: `${row.firstName} ${row.lastName}`,
+  }));
 }
 
 // Saldo por cliente. Incluye clientes sin movimientos (montos en cero).

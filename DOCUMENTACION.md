@@ -392,6 +392,7 @@ store-manager/
 │   │   ├── flash-toast.tsx     # Notificación de éxito tras un redirect (?flash=)
 │   │   ├── submit-button.tsx   # Botón con spinner + bloqueo anti doble-envío
 │   │   ├── theme-toggle.tsx    # Tema claro/oscuro/sistema (+ script anti-flash)
+│   │   ├── user-avatar.tsx     # Avatar con iniciales (listas y cabecera)
 │   │   └── ui/                 # shadcn/ui: button, card, input, label, select, …
 │   │
 │   ├── db/
@@ -464,7 +465,7 @@ Configuradas explícitamente en `app/routes.ts`.
 
 | URL | Archivo | Permiso | Descripción |
 | --- | --- | --- | --- |
-| `/` | `home.tsx` | público | Portada con accesos a login/panel |
+| `/` | `home.tsx` | público | Portada tipo fintech (hero, mock del producto, features) con accesos a login/panel |
 | `/login` | `login.tsx` | público | Inicio de sesión (redirige si ya hay sesión) |
 | `/logout` | `logout.tsx` | — | Cierra sesión (POST) |
 | `/.well-known/appspecific/com.chrome.devtools.json` | `well-known.devtools.ts` | público | Responde 204 (silencia la petición de Chrome) |
@@ -577,7 +578,8 @@ reciben `businessId` para el aislamiento.
 ### `metrics` (`metrics.server.ts`)
 
 `getBusinessMetrics(businessId)`, `getGlobalMetrics()`,
-`listCustomerBalances(businessId)`, `getMonthlyFlow(businessId | null, months)`.
+`listCustomerBalances(businessId)`, `listRecentMovements(businessId, limit)`,
+`getMonthlyFlow(businessId | null, months, timeZone)`.
 
 ### `reports` (`report.server.ts` + `report-range.ts`)
 
@@ -624,15 +626,23 @@ reciben `businessId` para el aislamiento.
   nombre exacto** antes de habilitar el botón. Muestra el impacto en cascada
   (clientes, movimientos y usuarios afectados) y solo está disponible para el
   Administrador Global.
+- **Layout tipo fintech**: en **escritorio** (`lg:`) una **barra lateral fija**
+  (`app/routes/dashboard.tsx`) con marca, navegación (icono + etiqueta, ítem activo
+  resaltado), selector de tienda activa y tarjeta de usuario (avatar, tema, salir).
+  En **móvil** (`lg:hidden`) hay un encabezado compacto y una **barra inferior
+  flotante** con el ítem activo en *pill* (`components/mobile-nav.tsx`). Los ítems
+  se generan según los permisos del usuario.
+- **Panel (dashboard)**: saludo personalizado con la fecha local, una **tarjeta de
+  balance destacada** (hero con degradado de marca y métricas rápidas), **accesos
+  rápidos** en tarjetas con *chips* de color, tarjetas KPI con acento de color,
+  gráficas y una lista de **actividad reciente** (`listRecentMovements`).
+- **Chips de color y avatares**: los tonos (`emerald`, `rose`, `amber`, `sky`,
+  `violet`) se adaptan a claro/oscuro; `components/user-avatar.tsx` muestra las
+  iniciales en listas y cabecera.
 - **Progreso de navegación**: una barra fina superior indica que hay una
   navegación/carga en curso.
-- **Escritorio más amplio**: el panel usa `max-w-5xl`, navegación con icono +
-  etiqueta y el detalle del cliente se divide en dos columnas (formulario fijo +
-  historial).
-- **Navegación responsiva**: en escritorio, tabs superiores; en móvil
-  (`< sm`) una **barra inferior flotante** con iconos + etiqueta y el ítem activo
-  resaltado (`components/mobile-nav.tsx`, oculta con `sm:hidden`). Los ítems se
-  generan según los permisos del usuario.
+- **Escritorio más amplio**: el contenido usa `max-w-6xl`; el detalle del cliente
+  se divide en dos columnas (formulario fijo + historial).
 - **PWA instalable**: `public/manifest.webmanifest` + `public/service-worker.js`
   + iconos (192/512/maskable/apple). El service worker se registra desde
   `root.tsx`, lo que permite «Agregar a pantalla de inicio» en el celular.

@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
+import { UserAvatar } from "~/components/user-avatar";
 import { authContext } from "~/context";
 import { getBusinessById } from "~/features/businesses/services/business.server";
 import { listBusinessUsers } from "~/features/users/services/user.server";
@@ -59,9 +60,10 @@ export default function Users({ loaderData }: Route.ComponentProps) {
               <li key={user.id}>
                 <Link
                   to={`/dashboard/users/${user.id}`}
-                  className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/60"
+                  className="flex items-center gap-3 p-4 transition-colors hover:bg-muted/60"
                 >
-                  <span className="min-w-0">
+                  <UserAvatar name={user.name} className="size-11 text-base" />
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-semibold">
                       {user.name}
                     </span>

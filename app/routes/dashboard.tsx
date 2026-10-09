@@ -2,6 +2,7 @@ import {
   ChartColumn,
   LayoutDashboard,
   type LucideIcon,
+  LogOut,
   Store,
   UserCog,
   Users,
@@ -10,7 +11,8 @@ import { Form, NavLink, Outlet, useNavigation } from "react-router";
 import { FlashToast } from "~/components/flash-toast";
 import { MobileNav, type MobileNavItem } from "~/components/mobile-nav";
 import { ThemeToggle } from "~/components/theme-toggle";
-import { Button, buttonVariants } from "~/components/ui/button";
+import { Button } from "~/components/ui/button";
+import { UserAvatar } from "~/components/user-avatar";
 import { authContext } from "~/context";
 import { getBusinessById } from "~/features/businesses/services/business.server";
 import { getActiveBusinessId } from "~/lib/business-context.server";
@@ -50,6 +52,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     activeBusinessId,
     activeBusinessName: activeBusiness?.name ?? null,
     canReadCustomers: can("customers:read"),
+    canCreateCustomers: can("customers:create"),
     canReadMetrics: can("metrics:read"),
     canManageUsers: can("users:manage"),
     canManageBusinesses: can("businesses:manage"),
@@ -65,7 +68,7 @@ function NavigationProgress() {
     <div
       aria-hidden
       className={cn(
-        "fixed inset-x-0 top-0 z-30 h-0.5 origin-left bg-primary transition-opacity duration-300",
+        "fixed inset-x-0 top-0 z-40 h-0.5 origin-left bg-primary transition-opacity duration-300",
         active ? "animate-pulse opacity-100" : "opacity-0",
       )}
     >
@@ -82,7 +85,6 @@ function NavigationProgress() {
 export default function DashboardLayout({
   loaderData,
 }: Route.ComponentProps) {
-  // Elementos de navegación (compartidos por las tabs de escritorio y la barra móvil).
   const navItems: MobileNavItem[] = [
     { to: "/dashboard", label: "Panel", icon: LayoutDashboard, end: true },
     ...(loaderData.canReadCustomers
@@ -99,20 +101,76 @@ export default function DashboardLayout({
       : []),
   ];
 
-  const secondaryLine = loaderData.isSuperadmin
+  const contextLine = loaderData.isSuperadmin
     ? loaderData.activeBusinessName
       ? `Tienda activa: ${loaderData.activeBusinessName}`
       : "Todas las tiendas"
     : loaderData.user.email;
 
   return (
-    <div className="mx-auto min-h-screen max-w-5xl">
+    <div className="min-h-screen">
       <NavigationProgress />
 
-      <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur">
-        <div className="flex items-center justify-between gap-3 p-4">
+      {/* Barra lateral (escritorio). */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border/70 bg-card/60 px-4 py-5 backdrop-blur-xl lg:flex">
+        <BrandMark />
+
+        <nav className="mt-7 flex flex-1 flex-col gap-1">
+          {navItems.map((item) => (
+            <SidebarNavLink key={item.to} item={item} />
+          ))}
+        </nav>
+
+        {loaderData.isSuperadmin ? (
+          <NavLink
+            to="/select-business?redirectTo=/dashboard"
+            className="mb-3 flex items-center gap-3 rounded-2xl border border-border/70 bg-background/60 p-3 transition-colors hover:bg-muted"
+          >
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary">
+              <Store className="size-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[0.7rem] font-medium text-muted-foreground">
+                Tienda activa
+              </span>
+              <span className="block truncate text-sm font-semibold">
+                {loaderData.activeBusinessName ?? "Todas las tiendas"}
+              </span>
+            </span>
+          </NavLink>
+        ) : null}
+
+        <div className="flex items-center gap-2 border-t border-border/70 pt-4">
+          <UserAvatar name={loaderData.user.name} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold">
+              {loaderData.user.name}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {contextLine}
+            </p>
+          </div>
+          <ThemeToggle className="size-9" />
+          <Form method="post" action="/logout">
+            <Button
+              type="submit"
+              variant="ghost"
+              size="icon"
+              aria-label="Salir"
+              title="Salir"
+              className="size-9 rounded-xl text-muted-foreground"
+            >
+              <LogOut className="size-4" />
+            </Button>
+          </Form>
+        </div>
+      </aside>
+
+      <div className="lg:pl-64">
+        {/* Encabezado móvil. */}
+        <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border/70 bg-background/80 px-4 py-3 backdrop-blur-xl lg:hidden">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-sm">
+            <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-sm font-bold text-primary-foreground shadow-sm">
               ST
             </span>
             <div className="min-w-0">
@@ -120,44 +178,47 @@ export default function DashboardLayout({
                 {loaderData.user.name}
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                {secondaryLine}
+                {contextLine}
               </p>
             </div>
           </div>
-
           <div className="flex shrink-0 items-center gap-2">
             {loaderData.isSuperadmin ? (
               <Button
                 asChild
                 variant="outline"
-                className="hidden rounded-xl sm:inline-flex"
+                size="icon"
+                className="size-10 rounded-xl"
               >
-                <NavLink to="/select-business?redirectTo=/dashboard">
+                <NavLink
+                  to="/select-business?redirectTo=/dashboard"
+                  aria-label="Cambiar tienda"
+                  title="Cambiar tienda"
+                >
                   <Store className="size-4" />
-                  {loaderData.activeBusinessName ? "Cambiar" : "Elegir tienda"}
                 </NavLink>
               </Button>
             ) : null}
-            <ThemeToggle />
+            <ThemeToggle className="size-10" />
             <Form method="post" action="/logout">
-              <Button type="submit" variant="outline" className="rounded-xl">
-                Salir
+              <Button
+                type="submit"
+                variant="outline"
+                size="icon"
+                aria-label="Salir"
+                title="Salir"
+                className="size-10 rounded-xl"
+              >
+                <LogOut className="size-4" />
               </Button>
             </Form>
           </div>
-        </div>
+        </header>
 
-        {/* Tabs de escritorio con icono + etiqueta. */}
-        <nav className="hidden gap-1 overflow-x-auto px-3 pb-2 sm:flex">
-          {navItems.map((item) => (
-            <DesktopNavLink key={item.to} item={item} />
-          ))}
-        </nav>
-      </header>
-
-      <main className="p-4 pb-28 sm:p-6 sm:pb-12">
-        <Outlet />
-      </main>
+        <main className="mx-auto w-full max-w-6xl px-4 pt-4 pb-28 sm:px-6 sm:pt-6 lg:px-8 lg:pt-8 lg:pb-12">
+          <Outlet />
+        </main>
+      </div>
 
       <MobileNav items={navItems} />
       <FlashToast />
@@ -165,7 +226,21 @@ export default function DashboardLayout({
   );
 }
 
-function DesktopNavLink({ item }: { item: MobileNavItem }) {
+function BrandMark() {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary text-base font-bold text-primary-foreground shadow-sm">
+        ST
+      </span>
+      <div className="leading-tight">
+        <p className="text-sm font-bold tracking-tight">Gestor de Tienda</p>
+        <p className="text-xs text-muted-foreground">Fiados y abonos</p>
+      </div>
+    </div>
+  );
+}
+
+function SidebarNavLink({ item }: { item: MobileNavItem }) {
   const Icon: LucideIcon = item.icon;
   return (
     <NavLink
@@ -173,12 +248,14 @@ function DesktopNavLink({ item }: { item: MobileNavItem }) {
       end={item.end}
       className={({ isActive }) =>
         cn(
-          buttonVariants({ variant: isActive ? "default" : "ghost" }),
-          "rounded-xl",
+          "flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-medium transition-colors",
+          isActive
+            ? "bg-primary text-primary-foreground shadow-sm"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground",
         )
       }
     >
-      <Icon className="size-4" aria-hidden />
+      <Icon className="size-5 shrink-0" aria-hidden />
       {item.label}
     </NavLink>
   );

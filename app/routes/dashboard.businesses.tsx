@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus, Store } from "lucide-react";
 import { Link } from "react-router";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -44,9 +44,12 @@ export default function Businesses({ loaderData }: Route.ComponentProps) {
           <Card className="gap-0 p-0">
             <Link
               to={`/dashboard/businesses/${loaderData.business.id}`}
-              className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/60"
+              className="flex items-center gap-3 p-4 transition-colors hover:bg-muted/60"
             >
-              <span className="min-w-0">
+              <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/12 text-primary">
+                <Store className="size-5" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
                 <span className="block truncate text-base font-semibold">
                   {loaderData.business.name}
                 </span>
@@ -93,9 +96,12 @@ export default function Businesses({ loaderData }: Route.ComponentProps) {
               <li key={business.id}>
                 <Link
                   to={`/dashboard/businesses/${business.id}`}
-                  className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/60"
+                  className="flex items-center gap-3 p-4 transition-colors hover:bg-muted/60"
                 >
-                  <span className="min-w-0">
+                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/12 text-primary">
+                    <Store className="size-5" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-semibold">
                       {business.name}
                     </span>
